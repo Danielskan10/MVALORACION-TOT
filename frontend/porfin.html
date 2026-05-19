@@ -321,6 +321,9 @@ tr.obs-row td{background:#e3b34110;}
   <div class="tab" onclick="showTab('tab-tir',this)">⚠ TIR/DV
     <span class="tab-badge" id="tir-badge" style="display:none;"></span>
   </div>
+  <div class="tab" onclick="showTab('tab-verificacion',this)">🔬 Verificación
+    <span class="tab-badge" id="verif-badge" style="display:none;"></span>
+  </div>
   <div class="tab" onclick="showTab('tab-errores',this)">🚨 Errores</div>
   <div class="tab" onclick="showTab('tab-portafolios',this)">💼 Portafolios</div>
   <div class="tab" onclick="showTab('tab-monedas',this)">💱 Monedas</div>
@@ -479,6 +482,58 @@ tr.obs-row td{background:#e3b34110;}
 <!-- ── TAB: MONEDAS ── -->
 <div class="tab-panel" id="tab-monedas">
   <div class="table-wrap" id="wrap-monedas-596"><div class="empty"><span class="spinner"></span></div></div>
+</div>
+
+<!-- ── TAB: VERIFICACIÓN ── -->
+<div class="tab-panel" id="tab-verificacion">
+  <div class="banner" style="margin-bottom:.75rem;background:rgba(31,111,235,.1);border-color:var(--blue2);">
+    🔬 <strong>Verificación de valoración manual</strong> — Calcula el valor de mercado teórico usando precios de Infovalmer (SP/SW/MX) y compara contra lo que reportó Porfin. Requiere que <strong>Especies.csv</strong> esté configurado en Ajustes y que los archivos SP/MX del día estén disponibles.
+  </div>
+  <!-- KPI row verificación -->
+  <div id="kpi-verif-row" style="display:flex;gap:.6rem;flex-wrap:wrap;margin-bottom:.75rem;">
+    <div class="kpi-pill"><div class="kpi-pill-val c-blue" id="kv-total">—</div><div class="kpi-pill-info"><div class="kpi-pill-label">Total posiciones</div></div></div>
+    <div class="kpi-pill"><div class="kpi-pill-val c-ok" id="kv-con-precio">—</div><div class="kpi-pill-info"><div class="kpi-pill-label">Con precio Infovalmer</div></div></div>
+    <div class="kpi-pill"><div class="kpi-pill-val c-warn" id="kv-sin-precio">—</div><div class="kpi-pill-info"><div class="kpi-pill-label">Sin precio Infovalmer</div></div></div>
+    <div class="kpi-pill"><div class="kpi-pill-val c-err" id="kv-alertas">—</div><div class="kpi-pill-info"><div class="kpi-pill-label">Alertas valoración</div></div></div>
+    <div class="kpi-pill"><div class="kpi-pill-val c-purple" id="kv-sin-tipo">—</div><div class="kpi-pill-info"><div class="kpi-pill-label">Sin tipo activo</div></div></div>
+  </div>
+  <!-- Filtros verificación -->
+  <div class="filter-bar" style="margin-bottom:.5rem;">
+    <div>
+      <div style="font-size:.65rem;color:var(--muted);margin-bottom:.2rem;text-transform:uppercase;">Umbral % alerta</div>
+      <input type="number" id="verif-umbral-pct" value="1" step="0.1" min="0" style="width:80px;background:var(--surface2);border:1px solid var(--border2);color:var(--text);padding:.3rem .5rem;border-radius:var(--radius);font-size:.78rem;"/>
+    </div>
+    <div>
+      <div style="font-size:.65rem;color:var(--muted);margin-bottom:.2rem;text-transform:uppercase;">Umbral abs alerta</div>
+      <input type="number" id="verif-umbral-abs" value="1000" step="100" min="0" style="width:100px;background:var(--surface2);border:1px solid var(--border2);color:var(--text);padding:.3rem .5rem;border-radius:var(--radius);font-size:.78rem;"/>
+    </div>
+    <div>
+      <div style="font-size:.65rem;color:var(--muted);margin-bottom:.2rem;text-transform:uppercase;">Portafolio</div>
+      <input type="text" id="verif-portafolio" placeholder="Todos..." style="width:140px;background:var(--surface2);border:1px solid var(--border2);color:var(--text);padding:.3rem .5rem;border-radius:var(--radius);font-size:.78rem;"/>
+    </div>
+    <label style="display:flex;align-items:center;gap:.4rem;font-size:.78rem;color:var(--text);margin-top:1rem;">
+      <input type="checkbox" id="verif-solo-alertas"> Solo alertas
+    </label>
+    <button class="btn" onclick="cargarVerificacion()" style="margin-top:.9rem;">🔬 Calcular verificación</button>
+    <button class="btn btn-ghost btn-sm" onclick="exportarVerifCSV()" style="margin-top:.9rem;">⬇ CSV</button>
+  </div>
+  <!-- Subtabs valoración / causación -->
+  <div class="subtab-bar" style="margin-bottom:.75rem;">
+    <button class="subtab active" id="vsubtab-valoracion" onclick="switchVerifSubtab('valoracion',this)">Verificación Valoración (596)</button>
+    <button class="subtab" id="vsubtab-causacion" onclick="switchVerifSubtab('causacion',this)">Verificación Causación (575)</button>
+  </div>
+  <div id="wrap-verif-valoracion">
+    <div class="table-wrap" id="wrap-verificacion"><div class="empty">Haz clic en "Calcular verificación" para iniciar</div></div>
+  </div>
+  <div id="wrap-verif-causacion" style="display:none;">
+    <!-- KPI causación -->
+    <div id="kpi-verif-caus-row" style="display:flex;gap:.6rem;flex-wrap:wrap;margin-bottom:.75rem;">
+      <div class="kpi-pill"><div class="kpi-pill-val c-blue" id="kvc-total">—</div><div class="kpi-pill-info"><div class="kpi-pill-label">Posiciones 575</div></div></div>
+      <div class="kpi-pill"><div class="kpi-pill-val c-err" id="kvc-alertas">—</div><div class="kpi-pill-info"><div class="kpi-pill-label">Alertas causación</div></div></div>
+      <div class="kpi-pill"><div class="kpi-pill-val c-warn" id="kvc-dif-total">—</div><div class="kpi-pill-info"><div class="kpi-pill-label">Dif total causación</div></div></div>
+    </div>
+    <div class="table-wrap" id="wrap-verif-caus-tabla"><div class="empty">Clic en "Calcular verificación"</div></div>
+  </div>
 </div>
 
 <script>
@@ -1065,6 +1120,142 @@ function exportarCSV(){
 }
 function toggleSoloAlertas(){
   const cb=document.getElementById('solo-alertas');cb.checked=!cb.checked;cargarPosiciones();
+}
+
+// ── VERIFICACIÓN ──────────────────────────────────────────────────────────────
+let _verifData=[], _verifCausData=[], _verifSubtab='valoracion';
+
+function switchVerifSubtab(sub,el){
+  _verifSubtab=sub;
+  document.querySelectorAll('.subtab').forEach(b=>{
+    if(b.id&&b.id.startsWith('vsubtab'))b.classList.remove('active');
+  });
+  el.classList.add('active');
+  document.getElementById('wrap-verif-valoracion').style.display=sub==='valoracion'?'':'none';
+  document.getElementById('wrap-verif-causacion').style.display=sub==='causacion'?'':'none';
+}
+
+async function cargarVerificacion(){
+  const fecha=document.getElementById('sel-fecha').value;
+  if(!fecha){alert('Selecciona una fecha.');return;}
+  const umbPct=parseFloat(document.getElementById('verif-umbral-pct').value)||1;
+  const umbAbs=parseFloat(document.getElementById('verif-umbral-abs').value)||1000;
+  const soloAl=document.getElementById('verif-solo-alertas').checked;
+  const port=document.getElementById('verif-portafolio').value.trim();
+
+  // Verificación valoración
+  const wv=document.getElementById('wrap-verificacion');
+  wv.innerHTML='<div class="empty"><span class="spinner"></span> Calculando verificación de valoración…</div>';
+  try{
+    const params=new URLSearchParams({umbral_pct:umbPct,umbral_abs:umbAbs});
+    if(soloAl)params.set('solo_alertas','true');
+    if(port)params.set('portafolio',port);
+    const d=await fetchJSON(`/api/porfin/verificacion/${fecha}?${params}`);
+    _verifData=d.filas||[];
+
+    document.getElementById('kv-total').textContent=fmt(d.total);
+    document.getElementById('kv-con-precio').textContent=fmt(d.con_precio_infovalmer);
+    document.getElementById('kv-sin-precio').textContent=fmt(d.sin_precio_infovalmer);
+    document.getElementById('kv-alertas').textContent=fmt(d.total_alertas);
+    document.getElementById('kv-sin-tipo').textContent=fmt(d.sin_tipo);
+
+    const badge=document.getElementById('verif-badge');
+    if(d.total_alertas>0){badge.textContent=d.total_alertas;badge.style.display='';}
+    else{badge.style.display='none';}
+
+    renderVerifTable();
+  }catch(e){wv.innerHTML=`<div class="empty">Error: ${e.message}</div>`;}
+
+  // Verificación causación
+  const wc=document.getElementById('wrap-verif-caus-tabla');
+  wc.innerHTML='<div class="empty"><span class="spinner"></span> Calculando verificación de causación…</div>';
+  try{
+    const params=new URLSearchParams({umbral_abs:umbAbs});
+    if(soloAl)params.set('solo_alertas','true');
+    if(port)params.set('portafolio',port);
+    const d2=await fetchJSON(`/api/porfin/verificacion_causacion/${fecha}?${params}`);
+    _verifCausData=d2.filas||[];
+
+    document.getElementById('kvc-total').textContent=fmt(d2.total);
+    document.getElementById('kvc-alertas').textContent=fmt(d2.total_alertas);
+    document.getElementById('kvc-dif-total').textContent=fmtN(d2.dif_total_causacion);
+
+    renderVerifCausTable();
+  }catch(e){wc.innerHTML=`<div class="empty">Error causación: ${e.message}</div>`;}
+}
+
+function renderVerifTable(){
+  const wrap=document.getElementById('wrap-verificacion');
+  if(!_verifData.length){wrap.innerHTML='<div class="empty">Sin datos — verifica que Especies.csv esté configurado en Ajustes.</div>';return;}
+  const cols=['ESPECIE','TITULO','ISIN','PORTAFOLIO','TIPO','MONEDA','NOMINAL',
+              'PRECIO_PORFIN','PRECIO_INFOVALMER','FACTOR_MONEDA',
+              'VALORACION_PORFIN','VALORACION_MANUAL','DIF_ABS','DIF_PCT','ALERTA','MOTIVO_ALERTA'];
+  const show=cols.filter(c=>_verifData.some(r=>r[c]!=null&&r[c]!==''));
+  let html=`<table class="data-table"><thead><tr>${show.map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>`;
+  for(const r of _verifData){
+    const alerta=r.ALERTA;
+    const cls=alerta?'style="background:rgba(185,28,28,.18);"':'';
+    html+=`<tr ${cls}>`;
+    for(const c of show){
+      const v=r[c];
+      let cell='';
+      if(v==null){cell='<td style="color:var(--muted)">—</td>';}
+      else if(c==='ALERTA'){cell=`<td>${v?'<span style="color:var(--red2);font-weight:700">⚠</span>':'<span style="color:var(--green2)">✓</span>'}</td>`;}
+      else if(c==='DIF_PCT'&&v!=null){const cl=Math.abs(v)>5?'c-err':Math.abs(v)>1?'c-warn':'';cell=`<td class="${cl}">${v.toFixed(4)}%</td>`;}
+      else if(c==='DIF_ABS'&&v!=null){const cl=Math.abs(v)>1000000?'c-err':Math.abs(v)>1000?'c-warn':'';cell=`<td class="${cl}">${fmtN(v)}</td>`;}
+      else if(['NOMINAL','VLR_MER_OR','VALORACION_PORFIN','VALORACION_MANUAL'].includes(c)&&typeof v==='number'){cell=`<td style="text-align:right">${fmtN(v)}</td>`;}
+      else if(['PRECIO_PORFIN','PRECIO_INFOVALMER','FACTOR_MONEDA'].includes(c)&&typeof v==='number'){cell=`<td style="text-align:right">${v.toFixed(6)}</td>`;}
+      else{cell=`<td>${String(v||'').trim()}</td>`;}
+      html+=cell;
+    }
+    html+='</tr>';
+  }
+  html+='</tbody></table>';
+  wrap.innerHTML=html;
+}
+
+function renderVerifCausTable(){
+  const wrap=document.getElementById('wrap-verif-caus-tabla');
+  if(!_verifCausData.length){wrap.innerHTML='<div class="empty">Sin datos de causación.</div>';return;}
+  const cols=['ESPECIE','TITULO','ISIN','PORTAFOLIO','MONEDA','NOMINAL',
+              'VLR_MER_ANT','VLR_MER_HOY','CAUSACION_MER_PORFIN','CAUSACION_TIR_PORFIN',
+              'CAUSACION_MANUAL','DIF_CAUSACION','ALERTA','MOTIVO'];
+  const show=cols.filter(c=>_verifCausData.some(r=>r[c]!=null&&r[c]!==''));
+  let html=`<table class="data-table"><thead><tr>${show.map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>`;
+  for(const r of _verifCausData){
+    const alerta=r.ALERTA;
+    const cls=alerta?'style="background:rgba(185,28,28,.18);"':'';
+    html+=`<tr ${cls}>`;
+    for(const c of show){
+      const v=r[c];
+      let cell='';
+      if(v==null){cell='<td style="color:var(--muted)">—</td>';}
+      else if(c==='ALERTA'){cell=`<td>${v?'<span style="color:var(--red2);font-weight:700">⚠</span>':'<span style="color:var(--green2)">✓</span>'}</td>`;}
+      else if(c==='DIF_CAUSACION'&&v!=null){const cl=Math.abs(v)>1000000?'c-err':Math.abs(v)>1000?'c-warn':'';cell=`<td class="${cl}">${fmtN(v)}</td>`;}
+      else if(['NOMINAL','VLR_MER_ANT','VLR_MER_HOY','CAUSACION_MER_PORFIN','CAUSACION_TIR_PORFIN','CAUSACION_MANUAL'].includes(c)&&typeof v==='number'){cell=`<td style="text-align:right">${fmtN(v)}</td>`;}
+      else{cell=`<td>${String(v||'').trim()}</td>`;}
+      html+=cell;
+    }
+    html+='</tr>';
+  }
+  html+='</tbody></table>';
+  wrap.innerHTML=html;
+}
+
+function exportarVerifCSV(){
+  const data=_verifSubtab==='causacion'?_verifCausData:_verifData;
+  if(!data.length){alert('Primero calcula la verificación.');return;}
+  const keys=Object.keys(data[0]);
+  const csv=[keys.join(','),...data.map(r=>keys.map(k=>{const v=r[k];if(v==null)return'';if(typeof v==='string'&&v.includes(','))return`"${v}"`;return v;}).join(','))].join('\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));
+  a.download=`verificacion_${_verifSubtab}_${document.getElementById('sel-fecha').value}.csv`;a.click();
+}
+
+function fmtN(v){
+  if(v==null||v===undefined||v==='')return '—';
+  const n=parseFloat(v);
+  if(isNaN(n))return v;
+  return n.toLocaleString('es-CO',{minimumFractionDigits:2,maximumFractionDigits:2});
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────────

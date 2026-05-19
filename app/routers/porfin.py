@@ -1040,6 +1040,414 @@ def config_columnas(fecha: str):
     }
 
 
+# ── Motor de verificación de valoración ───────────────────────────────────────
+#
+# Replica la lógica del notebook MVALORACIONTOTAL para calcular
+# VALORACION_MANUAL y CAUSACION_MANUAL y compararlas contra Porfin.
+#
+# Fórmulas por TIPO (del notebook):
+#  FCPE / DFI / FONDOS DE PENSION → vlr_mer_or * moneda
+#  FM                              → vlr_mer_or * moneda * precio
+#  FIC / FCP                       → vlr_mer_or * precio
+#  CASH / CTA AHORROS / COLATERAL  → nominal * moneda
+#  ADR / ETF / ACCION INTERNACIONAL→ nominal * moneda * precio
+#  BONO INTERNACIONAL y similares  → nominal * moneda * (precio / 100)
+#  ACCION / ESTRATEGIAS            → nominal * precio
+#  BONO / CDT / TES PESOS y simil  → nominal * (precio / 100)
+#  FONDOCRENA                      → vlr_mer_or * precio
+#  ANTICIPO / FIDECOMISO / LOTE…   → vlr_mercado (de Porfin, sin recalcular)
+#  default                         → vlr_mercado
+
+_TIPOS_PORCENTAJE = {
+    "BONO", "CDT", "STRUCTURADO", "SUBORDINADO", "TES PESOS",
+    "TITULARIZADORA", "PAPEL COMERCIAL",
+}
+_TIPOS_PORC_MONEDA = {
+    "BONO INTERNACIONAL", "BONO UVR", "CDT UVR", "SUBORDINADO INTERNACIONAL",
+    "SUBORDINADO UVR", "TES UVR", "TIPS", "TREASURY", "YANKEE", "TBILL",
+    "TD", "NESTR",
+}
+
+# Factores moneda para conversión a COP  (cargado en runtime desde monedas)
+def _factor_moneda_estatico(m: str) -> float:
+    """Valor fijo 1 si no hay tabla de tasas. La API de verificación
+    carga la tabla real y pasa el factor real."""
+    m = str(m).strip().upper()
+    if m in ("COP", "$", "COP$", "COL$", "PESOS", "PESO", ""):
+        return 1.0
+    return 1.0  # sin tabla de tasas, no convierte — flag de "pendiente"
+
+
+def _calcular_valor_fila(
+    tipo: str,
+    nominal: float,
+    vlr_mer_or: float,
+    vlr_mercado: float,
+    precio: float,
+    moneda_factor: float,
+) -> Optional[float]:
+    """
+    Calcula el valor de mercado manual para una posición.
+    Devuelve None si faltan datos esenciales.
+    """
+    tipo = str(tipo).strip().upper()
+
+    if tipo in ("FCPE", "DFI", "FONDOS DE PENSION"):
+        if pd.notna(vlr_mer_or):
+            return vlr_mer_or * moneda_factor
+    elif tipo == "FM":
+        if pd.notna(vlr_mer_or) and pd.notna(precio):
+            return vlr_mer_or * moneda_factor * precio
+    elif tipo in ("FIC", "FCP"):
+        if pd.notna(vlr_mer_or) and pd.notna(precio):
+            return vlr_mer_or * precio
+    elif tipo in ("CASH", "CTA AHORROS", "COLATERAL"):
+        if pd.notna(nominal):
+            return nominal * moneda_factor
+    elif tipo in ("ADR", "ETF", "ACCION INTERNACIONAL"):
+        if pd.notna(nominal) and pd.notna(precio):
+            return nominal * moneda_factor * precio
+    elif tipo in _TIPOS_PORC_MONEDA:
+        if pd.notna(nominal) and pd.notna(precio):
+            return nominal * moneda_factor * (precio / 100.0)
+    elif tipo in ("ACCION", "ESTRATEGIAS"):
+        if pd.notna(nominal) and pd.notna(precio):
+            return nominal * precio
+    elif tipo in _TIPOS_PORCENTAJE:
+        if pd.notna(nominal) and pd.notna(precio):
+            return nominal * (precio / 100.0)
+    elif tipo == "FONDOCRENA":
+        if pd.notna(vlr_mer_or) and pd.notna(precio):
+            return vlr_mer_or * precio
+    elif tipo in ("ANTICIPO", "FIDEICOMISO", "LOTE", "CREDITO", "FORWARD"):
+        return vlr_mercado if pd.notna(vlr_mercado) else None
+    else:
+        return vlr_mercado if pd.notna(vlr_mercado) else None
+    return None
+
+
+def _cargar_especies(cfg: Dict) -> Dict[str, str]:
+    """Carga el archivo Especies.csv y retorna dict LLAVE → TIPO."""
+    path = Path(cfg.get("ref_especies", ""))
+    if not path.exists():
+        return {}
+    try:
+        df = pd.read_csv(path, sep=";", encoding="latin-1", dtype=str,
+                         on_bad_lines="skip")
+        df.columns = df.columns.astype(str).str.strip()
+        llave_col = next((c for c in df.columns if c.upper() == "LLAVE"), None)
+        tipo_col  = next((c for c in df.columns if c.upper() == "TIPO"), None)
+        if not llave_col or not tipo_col:
+            return {}
+        df = df[[llave_col, tipo_col]].dropna()
+        df[llave_col] = df[llave_col].astype(str).str.strip().str.upper()
+        df[tipo_col]  = df[tipo_col].astype(str).str.strip().str.upper()
+        df = df[df[llave_col] != ""].drop_duplicates(llave_col, keep="first")
+        return df.set_index(llave_col)[tipo_col].to_dict()
+    except Exception as e:
+        logger.warning(f"No se pudo cargar Especies.csv: {e}")
+        return {}
+
+
+def _cargar_precios_insumos(fecha: str) -> Dict[str, float]:
+    """
+    Carga precios del día desde los proveedores Infovalmer disponibles.
+    Prioridad: SP → SW → MX → NOTAS → MX_RV
+    Retorna dict ISIN/NEMO (upper) → precio.
+    """
+    try:
+        import sys
+        sys.path.insert(0, str(Path(__file__).parent))
+        from insumos import cargar_sp, cargar_sw, cargar_mx, cargar_notas, cargar_mx_rv
+    except ImportError:
+        return {}
+
+    precios: Dict[str, float] = {}
+    for cargador in [cargar_mx_rv, cargar_notas, cargar_mx, cargar_sw, cargar_sp]:
+        try:
+            df = cargador(fecha)
+            if df.empty or "PRECIO" not in df.columns:
+                continue
+            for _, r in df.iterrows():
+                pid = str(r.get("ID", r.get("ISIN", r.get("NEMO", "")))).strip().upper()
+                p   = float(r["PRECIO"]) if pd.notna(r["PRECIO"]) else None
+                if pid and p is not None and pid not in precios:
+                    precios[pid] = p
+                    # También indexar por NEMO si distinto
+                    nemo = str(r.get("NEMO", "")).strip().upper()
+                    if nemo and nemo != pid and nemo not in precios:
+                        precios[nemo] = p
+        except Exception as e:
+            logger.warning(f"Error cargando precios insumos: {e}")
+    return precios
+
+
+def _cargar_tasas_cambio(fecha: str) -> Dict[str, float]:
+    """Retorna dict MONEDA_NORM → factor_a_COP."""
+    try:
+        from insumos import cargar_monedas
+        df = cargar_monedas(fecha)
+        if df.empty:
+            return {}
+        tasas: Dict[str, float] = {}
+        for _, r in df.iterrows():
+            moneda = str(r.get("MONEDA", "")).strip().upper()
+            tasa   = r.get("TASA_COP")
+            if moneda and tasa and pd.notna(tasa):
+                tasas[moneda] = float(tasa)
+        return tasas
+    except Exception:
+        return {}
+
+
+def _resolver_moneda_factor(moneda_str: str, tasas: Dict[str, float]) -> float:
+    m = str(moneda_str).strip().upper()
+    if m in ("COP", "$", "COP$", "COL$", "PESOS", "PESO", ""):
+        return 1.0
+    if m.startswith("US"):
+        return tasas.get("USD", 1.0)
+    if m.startswith("EU"):
+        return tasas.get("EUR", 1.0)
+    if m.startswith("UVR"):
+        return tasas.get("UVR", 1.0)
+    if m.startswith("UU"):
+        return tasas.get("UVR", 1.0)
+    if m.startswith("UK") or m == "GBP":
+        return tasas.get("GBP", 1.0)
+    if m.startswith("BRL"):
+        return tasas.get("BRL", 1.0)
+    if m.startswith("MXN"):
+        return tasas.get("MXN", 1.0)
+    if m in ("E", "EI", "EF", "FIC"):
+        return 1.0
+    return tasas.get(m, 1.0)
+
+
+@router.get("/verificacion/{fecha}")
+def verificacion_valoracion(
+    fecha: str,
+    umbral_pct: float = Query(1.0, description="% diferencia para marcar como alerta"),
+    umbral_abs: float = Query(1000.0, description="Diferencia absoluta para alerta"),
+    solo_alertas: bool = Query(False),
+    portafolio: Optional[str] = Query(None),
+):
+    """
+    Verifica la valoración de Porfin contra el cálculo manual con precios
+    de proveedores Infovalmer (SP/SW/MX/NOTAS).
+    Cada fila tiene: VALORACION_PORFIN, PRECIO_INFOVALMER, TIPO,
+    VALORACION_MANUAL, DIF_ABS, DIF_PCT, ALERTA, MOTIVO_ALERTA.
+    """
+    from config import get_config
+    cfg = get_config()
+
+    df = _cargar_596(fecha)
+    if df.empty:
+        return {"error": f"No se encontró 596 para {fecha}", "filas": []}
+
+    mapa_tipo   = _cargar_especies(cfg)
+    precios_inf = _cargar_precios_insumos(fecha)
+    tasas       = _cargar_tasas_cambio(fecha)
+
+    def _norm(s):
+        return str(s).strip().upper()
+
+    resultados = []
+    for _, r in df.iterrows():
+        llave  = _norm(r.get("LLAVE", ""))
+        isin   = _norm(r.get("ISIN",  ""))
+        nemo   = _norm(r.get("NEMO",  ""))
+        moneda = str(r.get("MONEDA", "")).strip()
+
+        # Tipo de activo
+        tipo = (mapa_tipo.get(llave) or
+                mapa_tipo.get(isin)  or
+                mapa_tipo.get(nemo)  or "")
+
+        # Precio Infovalmer (buscar por ISIN → NEMO → LLAVE)
+        precio_inf = (precios_inf.get(isin) or
+                      precios_inf.get(nemo) or
+                      precios_inf.get(llave))
+
+        # Factor moneda
+        mfactor = _resolver_moneda_factor(moneda, tasas)
+
+        nominal     = r.get("NOMINAL")
+        vlr_mer_or  = r.get("VLR_MER_OR")
+        vlr_mercado = r.get("VLR_MERCADO")
+
+        val_porfin = vlr_mercado  # lo que dice Porfin
+
+        # Calcular valoración manual (usa precio Infovalmer si disponible,
+        # si no usa el precio del propio 596)
+        precio_para_calculo = precio_inf if precio_inf is not None else r.get("PRECIO")
+
+        val_manual = _calcular_valor_fila(
+            tipo=tipo,
+            nominal=float(nominal) if pd.notna(nominal) else float("nan"),
+            vlr_mer_or=float(vlr_mer_or) if pd.notna(vlr_mer_or) else float("nan"),
+            vlr_mercado=float(vlr_mercado) if pd.notna(vlr_mercado) else float("nan"),
+            precio=float(precio_para_calculo) if pd.notna(precio_para_calculo) else float("nan"),
+            moneda_factor=mfactor,
+        )
+
+        # Diferencias
+        dif_abs = None
+        dif_pct = None
+        alerta  = False
+        motivos = []
+
+        if val_manual is not None and val_porfin is not None and pd.notna(val_porfin) and pd.notna(val_manual):
+            dif_abs = round(val_porfin - val_manual, 2)
+            if val_manual != 0:
+                dif_pct = round((dif_abs / abs(val_manual)) * 100, 4)
+            if abs(dif_abs) > umbral_abs:
+                alerta = True
+                motivos.append(f"Dif abs {dif_abs:,.2f}")
+            if dif_pct is not None and abs(dif_pct) > umbral_pct:
+                alerta = True
+                motivos.append(f"Dif % {dif_pct:.2f}%")
+        elif val_manual is None and pd.notna(val_porfin):
+            if tipo == "":
+                motivos.append("Tipo activo desconocido (Especies.csv no cargado o LLAVE sin mapeo)")
+            elif precio_inf is None:
+                motivos.append(f"Sin precio Infovalmer — tipo {tipo}")
+                alerta = True
+
+        if solo_alertas and not alerta:
+            continue
+        if portafolio and "PORTAFOLIO" in df.columns:
+            if portafolio.upper() not in _norm(r.get("PORTAFOLIO", "")):
+                continue
+
+        fila = {
+            "LLAVE":              llave,
+            "ISIN":               isin,
+            "NEMO":               nemo,
+            "ESPECIE":            str(r.get("ESPECIE", "")).strip(),
+            "TITULO":             str(r.get("TITULO",  "")).strip(),
+            "TIPO":               tipo,
+            "PORTAFOLIO":         str(r.get("PORTAFOLIO", "")).strip(),
+            "MONEDA":             moneda,
+            "NOMINAL":            None if pd.isna(nominal) else round(float(nominal), 2),
+            "VLR_MER_OR":         None if pd.isna(vlr_mer_or) else round(float(vlr_mer_or), 2),
+            "PRECIO_PORFIN":      None if pd.isna(r.get("PRECIO")) else round(float(r.get("PRECIO")), 6),
+            "PRECIO_INFOVALMER":  round(precio_inf, 6) if precio_inf is not None else None,
+            "FACTOR_MONEDA":      round(mfactor, 6),
+            "VALORACION_PORFIN":  None if pd.isna(val_porfin) else round(float(val_porfin), 2),
+            "VALORACION_MANUAL":  round(val_manual, 2) if val_manual is not None else None,
+            "DIF_ABS":            dif_abs,
+            "DIF_PCT":            dif_pct,
+            "ALERTA":             alerta,
+            "MOTIVO_ALERTA":      " | ".join(motivos) if motivos else "",
+        }
+        resultados.append(fila)
+
+    total         = len(resultados)
+    alertas_count = sum(1 for f in resultados if f["ALERTA"])
+    sin_precio    = sum(1 for f in resultados if f["PRECIO_INFOVALMER"] is None)
+    sin_tipo      = sum(1 for f in resultados if not f["TIPO"])
+
+    return {
+        "fecha": fecha,
+        "total": total,
+        "con_precio_infovalmer": total - sin_precio,
+        "sin_precio_infovalmer": sin_precio,
+        "sin_tipo": sin_tipo,
+        "total_alertas": alertas_count,
+        "umbral_pct_usado": umbral_pct,
+        "umbral_abs_usado": umbral_abs,
+        "filas": resultados,
+    }
+
+
+@router.get("/verificacion_causacion/{fecha}")
+def verificacion_causacion(
+    fecha: str,
+    fecha_anterior: Optional[str] = Query(None, description="Fecha anterior YYYYMMDD — si no se indica, usa la más reciente disponible"),
+    umbral_abs: float = Query(1000.0),
+    solo_alertas: bool = Query(False),
+    portafolio: Optional[str] = Query(None),
+):
+    """
+    Verifica la causación del 575 contra el cálculo manual:
+    CAUSACION_MANUAL = VLR_MER_HOY - VLR_MER_ANT  (método mercado)
+    DIF_CAUSACION    = CAUSACION_MER (Porfin) - CAUSACION_MANUAL
+    """
+    df575 = _cargar_575(fecha)
+    if df575.empty:
+        return {"error": f"No se encontró 575 para {fecha}", "filas": []}
+
+    # Fecha anterior
+    if not fecha_anterior:
+        fechas = sorted(set(
+            d.name for d in _base_dir().iterdir()
+            if d.is_dir() and re.match(r"^\d{8}$", d.name) and d.name < fecha
+        ))
+        fecha_anterior = fechas[-1] if fechas else None
+
+    resultados = []
+    for _, r in df575.iterrows():
+        vlr_hoy = r.get("VLR_MER_HOY")
+        vlr_ant = r.get("VLR_MER_ANT")
+        caus_mer = r.get("CAUSACION_MER")
+        caus_tir = r.get("CAUSACION_TIR")
+
+        # Causación manual simple: variación de valor de mercado
+        caus_manual = None
+        if pd.notna(vlr_hoy) and pd.notna(vlr_ant):
+            caus_manual = round(float(vlr_hoy) - float(vlr_ant), 2)
+
+        dif_abs = None
+        alerta  = False
+        motivos = []
+
+        if caus_manual is not None and caus_mer is not None and pd.notna(caus_mer):
+            dif_abs = round(float(caus_mer) - caus_manual, 2)
+            if abs(dif_abs) > umbral_abs:
+                alerta = True
+                motivos.append(f"Dif causación {dif_abs:,.2f}")
+        elif caus_mer is None or pd.isna(caus_mer):
+            motivos.append("Sin causación Porfin")
+
+        if solo_alertas and not alerta:
+            continue
+        if portafolio and "PORTAFOLIO" in df575.columns:
+            if portafolio.upper() not in str(r.get("PORTAFOLIO", "")).upper():
+                continue
+
+        resultados.append({
+            "ESPECIE":            str(r.get("ESPECIE",    "")).strip(),
+            "TITULO":             str(r.get("TITULO",     "")).strip(),
+            "ISIN":               str(r.get("ISIN",       "")).strip().upper(),
+            "PORTAFOLIO":         str(r.get("PORTAFOLIO", "")).strip(),
+            "MONEDA":             str(r.get("MONEDA",     "")).strip(),
+            "NOMINAL":            None if pd.isna(r.get("NOMINAL")) else round(float(r.get("NOMINAL")), 2),
+            "VLR_MER_ANT":        None if pd.isna(vlr_ant) else round(float(vlr_ant), 2),
+            "VLR_MER_HOY":        None if pd.isna(vlr_hoy) else round(float(vlr_hoy), 2),
+            "CAUSACION_MER_PORFIN": None if pd.isna(caus_mer) else round(float(caus_mer), 2),
+            "CAUSACION_TIR_PORFIN": None if pd.isna(caus_tir) else round(float(caus_tir), 2),
+            "CAUSACION_MANUAL":   caus_manual,
+            "DIF_CAUSACION":      dif_abs,
+            "ALERTA":             alerta,
+            "MOTIVO":             " | ".join(motivos) if motivos else "",
+        })
+
+    total         = len(resultados)
+    alertas_count = sum(1 for f in resultados if f["ALERTA"])
+    difs          = [f["DIF_CAUSACION"] for f in resultados if f["DIF_CAUSACION"] is not None]
+    dif_total     = round(sum(difs), 2) if difs else 0.0
+
+    return {
+        "fecha":          fecha,
+        "fecha_anterior": fecha_anterior,
+        "total":          total,
+        "total_alertas":  alertas_count,
+        "dif_total_causacion": dif_total,
+        "umbral_abs_usado": umbral_abs,
+        "filas": resultados,
+    }
+
+
 # ── Referencia para mitra.py (compatibilidad) ─────────────────────────────────
 def _buscar_archivo_575(fecha: str) -> Optional[Path]:
     return _find_575(fecha)
