@@ -2,13 +2,13 @@
 # -*- coding: utf-8 -*-
 """
 ROUTER INSUMOS
-Proveedores de precios: MX (renta fija internacional), MX_RV (renta variable internacional),
-NOTAS (notas estructuradas), SB (betas/curvas), indicadores, monedas.
+Proveedores de precios: SP/SW/TP (Infovalmer J: drive), MX, MX_RV, NOTAS, SB, indicadores, monedas.
 """
 from __future__ import annotations
 
 import re
 import logging
+from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
@@ -86,6 +86,136 @@ def _read_csv_auto(path: Path, **kwargs) -> pd.DataFrame:
         except Exception:
             continue
     return pd.DataFrame()
+
+
+# ── Infovalmer J: drive ────────────────────────────────────────────────
+
+_BASE_INFOVALMER = Path(r"J:\VALORACION\VALORACION_ESPECIAL\Bolsa\INFOVALMER")
+
+
+def _sufijo_fecha(fecha_str: str) -> str:
+    """20260514 → 051426  (MMDDYY)"""
+    return datetime.strptime(fecha_str, "%Y%m%d").strftime("%m%d%y")
+
+
+def _infovalmer_dir(fecha: str) -> Path:
+    return _BASE_INFOVALMER / fecha
+
+
+def _parse_num(s: str):
+    try:
+        return float(str(s).strip().replace("\xa0", "").replace(" ", "").replace(",", "."))
+    except Exception:
+        return None
+
+
+def cargar_sp(fecha: str) -> pd.DataFrame:
+    """SP = Bolsa de Valores de Colombia, precios renta fija local (fixed-width .001)."""
+    sf = _sufijo_fecha(fecha)
+    path = _infovalmer_dir(fecha) / f"SP{sf}.001"
+    if not path.exists():
+        return pd.DataFrame()
+    filas = []
+    try:
+        with open(path, "r", encoding="latin-1", errors="ignore") as f:
+            for ln in f:
+                ln = ln.rstrip("\n")
+                if len(ln) < 130:
+                    continue
+                tipo = ln[7:8].strip()
+                if tipo not in ("D", "T", "V", ""):
+                    continue
+                precio = _parse_num(ln[110:129])
+                if precio is None:
+                    continue
+                filas.append({
+                    "Numero_Secuencia": ln[0:7].strip(),
+                    "Tipo_Registro":    tipo,
+                    "NEMO":             ln[8:20].strip(),
+                    "ISIN":             ln[20:32].strip(),
+                    "Numero_Emision":   ln[32:50].strip(),
+                    "PRECIO":           precio,
+                    "ID":               ln[20:32].strip(),
+                    "FUENTE":           "SP",
+                })
+    except Exception as e:
+        logger.error(f"Error cargando SP: {e}")
+        return pd.DataFrame()
+    df = pd.DataFrame(filas)
+    df["NEMO"] = df["NEMO"].str.strip().str.upper()
+    df["ISIN"] = df["ISIN"].str.strip().str.upper()
+    df["ID"]   = df["ISIN"].where(df["ISIN"] != "", df["NEMO"])
+    return df
+
+
+def cargar_sw(fecha: str) -> pd.DataFrame:
+    """SW = Precios secundarios / swap (regex .001)."""
+    sf = _sufijo_fecha(fecha)
+    path = _infovalmer_dir(fecha) / f"SW{sf}.001"
+    if not path.exists():
+        return pd.DataFrame()
+    patron = re.compile(
+        r"^(?P<sec>\d+)(?P<tipo>[A-Z])(?P<nemo>[A-Z0-9\-]+)\s+"
+        r"(?P<fecha>\d{4}-\d{2}-\d{2})(?P<valor>.*)$"
+    )
+    filas = []
+    try:
+        with open(path, "r", encoding="latin-1", errors="ignore") as f:
+            for ln in f:
+                m = patron.match(ln.strip())
+                if not m:
+                    continue
+                nums = re.findall(r"[-+]?\d[\d,.]*", m.group("valor"))
+                precio = _parse_num(nums[-1]) if nums else None
+                if precio is None:
+                    continue
+                nemo = m.group("nemo").strip().upper()
+                filas.append({
+                    "Numero_Secuencia": m.group("sec"),
+                    "Tipo_Registro":    m.group("tipo"),
+                    "NEMO":             nemo,
+                    "ISIN":             "",
+                    "PRECIO":           precio,
+                    "ID":               nemo,
+                    "FUENTE":           "SW",
+                })
+    except Exception as e:
+        logger.error(f"Error cargando SW: {e}")
+        return pd.DataFrame()
+    return pd.DataFrame(filas)
+
+
+def cargar_tp(fecha: str) -> pd.DataFrame:
+    """TP = Títulos participativos (fixed-width .txt)."""
+    path = _infovalmer_dir(fecha) / f"titulos_participativos_valoracion_{fecha}.txt"
+    if not path.exists():
+        return pd.DataFrame()
+    filas = []
+    try:
+        with open(path, "r", encoding="latin-1", errors="ignore") as f:
+            for ln in f:
+                ln = ln.rstrip("\n")
+                if len(ln) < 29:
+                    continue
+                precio = _parse_num(ln[19:29])
+                if precio is None:
+                    continue
+                isin = ln[7:19].strip().upper()
+                cod  = ln[0:6].strip().upper()
+                filas.append({
+                    "Codigo":      cod,
+                    "Tipo":        ln[6:7].strip(),
+                    "ISIN":        isin,
+                    "Precio":      precio,
+                    "Descripcion": ln[29:].strip(),
+                    "PRECIO":      precio,
+                    "ID":          isin if isin else cod,
+                    "FUENTE":      "TP",
+                })
+    except Exception as e:
+        logger.error(f"Error cargando TP: {e}")
+        return pd.DataFrame()
+    return pd.DataFrame(filas)
 
 
 # ── Cargadores específicos ──────────────────────────────────────────────
@@ -238,11 +368,14 @@ def cargar_monedas(fecha: str) -> pd.DataFrame:
 
 
 CARGADORES = {
-    "MX": cargar_mx,
+    "SP":    cargar_sp,
+    "SW":    cargar_sw,
+    "TP":    cargar_tp,
+    "MX":    cargar_mx,
     "MX_RV": cargar_mx_rv,
     "NOTAS": cargar_notas,
-    "SB": cargar_sb,
-    "IND": cargar_indicadores,
+    "SB":    cargar_sb,
+    "IND":   cargar_indicadores,
 }
 
 
@@ -338,6 +471,54 @@ def get_notas(fecha: str, limit: int = Query(200)):
     return df.replace({float("nan"): None}).head(limit).to_dict(orient="records")
 
 
+@router.get("/sp/{fecha}")
+def get_sp(
+    fecha: str,
+    busqueda: Optional[str] = Query(None),
+    limit: int = Query(1000),
+):
+    """Precios BVC renta fija local (Infovalmer SP)."""
+    df = cargar_sp(fecha)
+    if df.empty:
+        return []
+    if busqueda:
+        mask = df.apply(lambda r: r.astype(str).str.upper().str.contains(busqueda.upper(), na=False).any(), axis=1)
+        df = df[mask]
+    return df.replace({float("nan"): None}).head(limit).to_dict(orient="records")
+
+
+@router.get("/sw/{fecha}")
+def get_sw(
+    fecha: str,
+    busqueda: Optional[str] = Query(None),
+    limit: int = Query(1000),
+):
+    """Precios secundarios SW (Infovalmer)."""
+    df = cargar_sw(fecha)
+    if df.empty:
+        return []
+    if busqueda:
+        mask = df.apply(lambda r: r.astype(str).str.upper().str.contains(busqueda.upper(), na=False).any(), axis=1)
+        df = df[mask]
+    return df.replace({float("nan"): None}).head(limit).to_dict(orient="records")
+
+
+@router.get("/tp/{fecha}")
+def get_tp(
+    fecha: str,
+    busqueda: Optional[str] = Query(None),
+    limit: int = Query(1000),
+):
+    """Precios títulos participativos TP (Infovalmer)."""
+    df = cargar_tp(fecha)
+    if df.empty:
+        return []
+    if busqueda:
+        mask = df.apply(lambda r: r.astype(str).str.upper().str.contains(busqueda.upper(), na=False).any(), axis=1)
+        df = df[mask]
+    return df.replace({float("nan"): None}).head(limit).to_dict(orient="records")
+
+
 @router.get("/monedas/{fecha}")
 def get_monedas(fecha: str):
     """Tasas de cambio disponibles."""
@@ -351,7 +532,7 @@ def get_monedas(fecha: str):
 def variaciones_entre_fechas(
     fecha_inicio: str,
     fecha_fin: str,
-    proveedor: str = Query("MX", description="MX, MX_RV, NOTAS"),
+    proveedor: str = Query("SP", description="SP, SW, TP, MX, MX_RV, NOTAS"),
     umbral_pct: float = Query(5.0),
 ):
     """Variación de precios de un proveedor entre dos fechas."""
@@ -434,7 +615,7 @@ def get_alertas_precio(
     fecha_ant = fechas[idx - 1]
     alertas = []
     for nombre, fn in CARGADORES.items():
-        if nombre in ("SB", "IND"):
+        if nombre in ("SB", "IND", "TP"):
             continue
         try:
             df_h = fn(fecha)

@@ -264,7 +264,13 @@ tr.row-warn:hover td{background:#e3b34122;}
     <div class="sb-item" onclick="mostrarPanel('panel-historico',this)"><span class="sb-icon">⌛</span>Histórico por ISIN</div>
 
     <hr class="sb-divider"/>
-    <div class="sb-section">Proveedores</div>
+    <div class="sb-section">Infovalmer — Local</div>
+    <div class="sb-item" onclick="mostrarPanel('panel-sp',this)"><span class="sb-icon">◈</span>SP — BVC Renta Fija<span class="sb-badge ok" id="sb-badge-sp">—</span></div>
+    <div class="sb-item" onclick="mostrarPanel('panel-sw',this)"><span class="sb-icon">◈</span>SW — Secundario<span class="sb-badge ok" id="sb-badge-sw">—</span></div>
+    <div class="sb-item" onclick="mostrarPanel('panel-tp',this)"><span class="sb-icon">◈</span>TP — Tít. Participativos<span class="sb-badge ok" id="sb-badge-tp">—</span></div>
+
+    <hr class="sb-divider"/>
+    <div class="sb-section">Infovalmer — Internacional</div>
     <div class="sb-item" onclick="mostrarPanel('panel-mx',this)"><span class="sb-icon">◈</span>MX — Renta Fija Int.</div>
     <div class="sb-item" onclick="mostrarPanel('panel-notas',this)"><span class="sb-icon">◈</span>NOTAS estructuradas</div>
     <div class="sb-item" onclick="mostrarPanel('panel-mxrv',this)"><span class="sb-icon">◈</span>MX_RV — Renta Var.</div>
@@ -312,7 +318,9 @@ tr.row-warn:hover td{background:#e3b34122;}
         <div>
           <div style="font-size:.65rem;color:var(--muted);margin-bottom:.2rem;text-transform:uppercase;">Proveedor</div>
           <select id="fil-prov-var" onchange="cargarVariaciones()">
-            <option value="MX">MX</option>
+            <option value="SP">SP — BVC Renta Fija</option>
+            <option value="SW">SW — Secundario</option>
+            <option value="MX">MX — Renta Fija Int.</option>
             <option value="NOTAS">NOTAS</option>
             <option value="MX_RV">MX_RV</option>
           </select>
@@ -348,9 +356,11 @@ tr.row-warn:hover td{background:#e3b34122;}
       <div class="filter-bar">
         <div>
           <div style="font-size:.65rem;color:var(--muted);margin-bottom:.2rem;text-transform:uppercase;">Proveedores a cruzar</div>
-          <span id="chk-provs-comp" style="display:flex;gap:.5rem;align-items:center;">
+          <span id="chk-provs-comp" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
+            <label style="font-size:.78rem;color:var(--text);display:flex;align-items:center;gap:.25rem;"><input type="checkbox" value="SP" checked> SP</label>
+            <label style="font-size:.78rem;color:var(--text);display:flex;align-items:center;gap:.25rem;"><input type="checkbox" value="SW"> SW</label>
             <label style="font-size:.78rem;color:var(--text);display:flex;align-items:center;gap:.25rem;"><input type="checkbox" value="MX" checked> MX</label>
-            <label style="font-size:.78rem;color:var(--text);display:flex;align-items:center;gap:.25rem;"><input type="checkbox" value="NOTAS" checked> NOTAS</label>
+            <label style="font-size:.78rem;color:var(--text);display:flex;align-items:center;gap:.25rem;"><input type="checkbox" value="NOTAS"> NOTAS</label>
             <label style="font-size:.78rem;color:var(--text);display:flex;align-items:center;gap:.25rem;"><input type="checkbox" value="MX_RV"> MX_RV</label>
           </span>
         </div>
@@ -407,6 +417,42 @@ tr.row-warn:hover td{background:#e3b34122;}
       <div id="hist-isin-list" style="display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:.75rem;"></div>
       <div id="panel-hist-content">
         <div class="empty" style="padding:3rem;">Ingresa un ISIN o selecciona uno de la tabla de variaciones</div>
+      </div>
+    </div>
+
+    <!-- ─── PANEL SP ─── -->
+    <div class="panel" id="panel-sp">
+      <div class="filter-bar">
+        <input type="text" id="fil-busq-sp" placeholder="Buscar ISIN / NEMO..." oninput="debounce(cargarSP,350)()" style="width:240px;"/>
+        <span id="cnt-sp" style="color:var(--muted);font-size:.75rem;margin-left:.25rem;"></span>
+        <span style="margin-left:auto;font-size:.72rem;color:var(--muted);">BVC — Renta Fija Local (J:\INFOVALMER)</span>
+      </div>
+      <div class="table-wrap" id="wrap-sp">
+        <div class="empty"><span class="spinner"></span></div>
+      </div>
+    </div>
+
+    <!-- ─── PANEL SW ─── -->
+    <div class="panel" id="panel-sw">
+      <div class="filter-bar">
+        <input type="text" id="fil-busq-sw" placeholder="Buscar NEMO / precio..." oninput="debounce(cargarSW,350)()" style="width:240px;"/>
+        <span id="cnt-sw" style="color:var(--muted);font-size:.75rem;margin-left:.25rem;"></span>
+        <span style="margin-left:auto;font-size:.72rem;color:var(--muted);">SW — Mercado Secundario (J:\INFOVALMER)</span>
+      </div>
+      <div class="table-wrap" id="wrap-sw">
+        <div class="empty"><span class="spinner"></span></div>
+      </div>
+    </div>
+
+    <!-- ─── PANEL TP ─── -->
+    <div class="panel" id="panel-tp">
+      <div class="filter-bar">
+        <input type="text" id="fil-busq-tp" placeholder="Buscar ISIN / Código..." oninput="debounce(cargarTP,350)()" style="width:240px;"/>
+        <span id="cnt-tp" style="color:var(--muted);font-size:.75rem;margin-left:.25rem;"></span>
+        <span style="margin-left:auto;font-size:.72rem;color:var(--muted);">TP — Títulos Participativos (J:\INFOVALMER)</span>
+      </div>
+      <div class="table-wrap" id="wrap-tp">
+        <div class="empty"><span class="spinner"></span></div>
       </div>
     </div>
 
@@ -484,6 +530,7 @@ const PL={
 };
 
 let _allDates=[], _comparacion=[], _variaciones=[], _curvas=[], _mxData=[], _notasData=[], _mxrvData=[];
+let _spData=[], _swData=[], _tpData=[];
 
 function debounce(fn,ms){let t;return(...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms);};}
 function fmt(v,d=4){if(v==null||isNaN(v))return'—';if(typeof v!=='number')v=Number(v);return v.toLocaleString('es-CO',{minimumFractionDigits:d,maximumFractionDigits:d});}
@@ -509,6 +556,9 @@ function mostrarPanel(id,el){
   document.getElementById(id).classList.add('active');
   if(el)el.classList.add('active');
   // Lazy load
+  if(id==='panel-sp'&&!_spData.length)cargarSP();
+  if(id==='panel-sw'&&!_swData.length)cargarSW();
+  if(id==='panel-tp'&&!_tpData.length)cargarTP();
   if(id==='panel-mx'&&!_mxData.length)cargarMX();
   if(id==='panel-notas'&&!_notasData.length)cargarNotas();
   if(id==='panel-mxrv'&&!_mxrvData.length)cargarMXRV();
@@ -533,7 +583,7 @@ async function cargarFechas(){
 }
 function fmtF(f){return f?`${f.slice(0,4)}-${f.slice(4,6)}-${f.slice(6)}`:'?';}
 
-function onFecha(){_mxData=[];_notasData=[];_mxrvData=[];_curvas=[];_comparacion=[];recargar();}
+function onFecha(){_mxData=[];_notasData=[];_mxrvData=[];_curvas=[];_comparacion=[];_spData=[];_swData=[];_tpData=[];recargar();}
 function onFechaAnt(){cargarVariaciones();}
 
 async function recargar(){
@@ -1036,6 +1086,57 @@ async function cargarMXRV(){
     document.getElementById('cnt-mxrv').textContent=`${_mxrvData.length} registros`;
     renderTablaGeneral('wrap-mxrv',_mxrvData,['ID','PRECIO'],{PRECIO:6});
   }catch(e){wrap.innerHTML=`<div class="empty">Sin datos MX_RV: ${e.message}</div>`;}
+}
+
+// ─── SP ──────────────────────────────────────────────────────────────────────
+async function cargarSP(){
+  const fecha=document.getElementById('sel-fecha').value;
+  const busq=(document.getElementById('fil-busq-sp').value||'').toUpperCase();
+  const wrap=document.getElementById('wrap-sp');
+  wrap.innerHTML='<div class="empty"><span class="spinner"></span></div>';
+  try{
+    const params=new URLSearchParams({limit:'2000'});
+    if(busq)params.set('busqueda',busq);
+    _spData=await fetchJSON(`/api/insumos/sp/${fecha}?${params}`);
+    document.getElementById('cnt-sp').textContent=`${_spData.length} registros`;
+    document.getElementById('sb-badge-sp').textContent=_spData.length||'—';
+    document.getElementById('sb-badge-sp').className='sb-badge '+(_spData.length?'ok':'');
+    renderTablaGeneral('wrap-sp',_spData,['NEMO','ISIN','PRECIO'],{PRECIO:6});
+  }catch(e){wrap.innerHTML=`<div class="empty">Sin datos SP (J: no disponible): ${e.message}</div>`;}
+}
+
+// ─── SW ──────────────────────────────────────────────────────────────────────
+async function cargarSW(){
+  const fecha=document.getElementById('sel-fecha').value;
+  const busq=(document.getElementById('fil-busq-sw').value||'').toUpperCase();
+  const wrap=document.getElementById('wrap-sw');
+  wrap.innerHTML='<div class="empty"><span class="spinner"></span></div>';
+  try{
+    const params=new URLSearchParams({limit:'2000'});
+    if(busq)params.set('busqueda',busq);
+    _swData=await fetchJSON(`/api/insumos/sw/${fecha}?${params}`);
+    document.getElementById('cnt-sw').textContent=`${_swData.length} registros`;
+    document.getElementById('sb-badge-sw').textContent=_swData.length||'—';
+    document.getElementById('sb-badge-sw').className='sb-badge '+(_swData.length?'ok':'');
+    renderTablaGeneral('wrap-sw',_swData,['NEMO','PRECIO'],{PRECIO:6});
+  }catch(e){wrap.innerHTML=`<div class="empty">Sin datos SW (J: no disponible): ${e.message}</div>`;}
+}
+
+// ─── TP ──────────────────────────────────────────────────────────────────────
+async function cargarTP(){
+  const fecha=document.getElementById('sel-fecha').value;
+  const busq=(document.getElementById('fil-busq-tp').value||'').toUpperCase();
+  const wrap=document.getElementById('wrap-tp');
+  wrap.innerHTML='<div class="empty"><span class="spinner"></span></div>';
+  try{
+    const params=new URLSearchParams({limit:'2000'});
+    if(busq)params.set('busqueda',busq);
+    _tpData=await fetchJSON(`/api/insumos/tp/${fecha}?${params}`);
+    document.getElementById('cnt-tp').textContent=`${_tpData.length} registros`;
+    document.getElementById('sb-badge-tp').textContent=_tpData.length||'—';
+    document.getElementById('sb-badge-tp').className='sb-badge '+(_tpData.length?'ok':'');
+    renderTablaGeneral('wrap-tp',_tpData,['Codigo','ISIN','Precio','Descripcion'],{Precio:6});
+  }catch(e){wrap.innerHTML=`<div class="empty">Sin datos TP (J: no disponible): ${e.message}</div>`;}
 }
 
 // ─── CURVAS ──────────────────────────────────────────────────────────────────
