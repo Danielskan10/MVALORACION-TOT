@@ -17,8 +17,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
+from typing import Any, Dict, Optional
 
 from routers import insumos, porfin, mitra
+from config import get_config, update_config, get_data_dir
 
 # ── Logging ────────────────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)-8s | %(message)s")
@@ -43,6 +46,27 @@ app.add_middleware(
 app.include_router(insumos.router, prefix="/api/insumos", tags=["Insumos"])
 app.include_router(porfin.router,  prefix="/api/porfin",  tags=["Porfin"])
 app.include_router(mitra.router,   prefix="/api/mitra",   tags=["Mitra"])
+
+# ── Endpoints de configuración ─────────────────────────────────────────
+class ConfigUpdate(BaseModel):
+    data_dir: Optional[str] = None
+    umbral_variacion_pct: Optional[float] = None
+    umbral_dif_causacion: Optional[float] = None
+    port: Optional[int] = None
+
+@app.get("/api/config", tags=["Config"])
+def get_config_endpoint():
+    cfg = get_config()
+    cfg["data_dir_exists"] = os.path.isdir(cfg.get("data_dir", ""))
+    return cfg
+
+@app.post("/api/config", tags=["Config"])
+def update_config_endpoint(body: ConfigUpdate):
+    updates = {k: v for k, v in body.model_dump().items() if v is not None}
+    if not updates:
+        return {"ok": False, "msg": "Sin cambios"}
+    cfg = update_config(updates)
+    return {"ok": True, "config": cfg}
 
 # ── Archivos estáticos (frontend) ──────────────────────────────────────
 # frontend/ está un nivel arriba de app/

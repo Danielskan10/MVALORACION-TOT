@@ -16,14 +16,19 @@ from typing import Optional, List, Dict, Any
 import pandas as pd
 import numpy as np
 from fastapi import APIRouter, Query, HTTPException
+import sys
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from config import get_data_dir
 
 logger = logging.getLogger("insumos")
 router = APIRouter()
 
-# Raíz del proyecto = dos niveles arriba de este archivo (app/routers/insumos.py)
+def _base_dir() -> Path:
+    return get_data_dir()
+
+# Para compatibilidad con código que usa BASE_DIR directamente
 _ROOT    = Path(__file__).parent.parent.parent
-BASE_DIR = _ROOT / "data"          # data/ con subcarpetas por fecha
-RAW_DIR  = _ROOT / "data"          # mismo sitio
+BASE_DIR = _ROOT / "data"
 
 # ── Utilidades ──────────────────────────────────────────────────────────
 def _num(x):
@@ -34,15 +39,14 @@ def _num(x):
 
 
 def _fechas_disponibles() -> List[str]:
+    base = _base_dir()
     patron = re.compile(r"^(\d{8})$")
     fechas = set()
-    # Subcarpetas data/YYYYMMDD/
-    for d in BASE_DIR.iterdir():
+    for d in base.iterdir():
         if d.is_dir() and patron.match(d.name):
             fechas.add(d.name)
-    # También escanea archivos sueltos en data/
     patron2 = re.compile(r"(\d{8})")
-    for f in BASE_DIR.glob("*"):
+    for f in base.glob("*"):
         if f.is_file():
             m = patron2.search(f.stem)
             if m:
@@ -51,8 +55,8 @@ def _fechas_disponibles() -> List[str]:
 
 
 def _buscar_archivo(fecha: str, prefijos: List[str], dirs: Optional[List[Path]] = None) -> Optional[Path]:
-    # Busca primero en subcarpeta data/YYYYMMDD/, luego en data/
-    fecha_dirs = [BASE_DIR / fecha, BASE_DIR]
+    base = _base_dir()
+    fecha_dirs = [base / fecha, base]
     dirs = dirs or fecha_dirs
     for d in dirs:
         if not d.exists():

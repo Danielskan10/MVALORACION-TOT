@@ -15,6 +15,9 @@ from typing import Optional, List, Dict, Any
 import pandas as pd
 import numpy as np
 from fastapi import APIRouter, Query, HTTPException
+import sys
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from config import get_data_dir
 
 logger = logging.getLogger("mitra")
 router = APIRouter()
@@ -37,7 +40,8 @@ def _num(x) -> Optional[float]:
 
 
 def _dirs_busqueda(fecha: str) -> List[Path]:
-    return [BASE_DIR / fecha, BASE_DIR]
+    base = get_data_dir()
+    return [base / fecha, base]
 
 
 def _buscar_mitra(fecha: str) -> Optional[Path]:

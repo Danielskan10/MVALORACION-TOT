@@ -17,6 +17,9 @@ import numpy as np
 from fastapi import APIRouter, Query, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse
 import io
+import sys
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from config import get_data_dir
 
 logger = logging.getLogger("porfin")
 router = APIRouter()
@@ -47,8 +50,8 @@ def _num(x) -> Optional[float]:
 
 
 def _dirs_busqueda(fecha: str) -> List[Path]:
-    """Devuelve lista de carpetas donde buscar: primero subcarpeta fecha, luego data/."""
-    return [BASE_DIR / fecha, BASE_DIR]
+    base = get_data_dir()
+    return [base / fecha, base]
 
 
 def _buscar_archivo_596(fecha: str) -> Optional[Path]:

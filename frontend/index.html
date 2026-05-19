@@ -118,6 +118,36 @@
   /* FOOTER */
   footer { text-align: center; color: var(--muted); font-size: .8rem; padding: 2rem; border-top: 1px solid var(--border); margin-top: 2rem; }
 
+  /* CONFIG MODAL */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; background: #0008; z-index: 200;
+    align-items: center; justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 2rem; width: 100%; max-width: 540px; box-shadow: 0 24px 64px #0006;
+  }
+  .modal h2 { font-size: 1.1rem; font-weight: 600; margin-bottom: 1.5rem; display: flex; align-items: center; gap: .5rem; }
+  .form-row { margin-bottom: 1.25rem; }
+  .form-row label { display: block; font-size: .8rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: .4rem; }
+  .form-row input {
+    width: 100%; background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text); padding: .55rem .9rem; border-radius: 6px;
+    font-size: .875rem; font-family: inherit;
+  }
+  .form-row input:focus { outline: none; border-color: var(--blue); }
+  .form-row .hint { font-size: .75rem; color: var(--muted); margin-top: .3rem; }
+  .form-row .hint.ok { color: var(--green); }
+  .form-row .hint.err { color: var(--red); }
+  .modal-actions { display: flex; gap: .75rem; justify-content: flex-end; margin-top: 1.5rem; }
+  .btn-icon {
+    background: var(--surface2); border: 1px solid var(--border); color: var(--muted);
+    width: 36px; height: 36px; border-radius: 8px; cursor: pointer; font-size: 1rem;
+    display: flex; align-items: center; justify-content: center; transition: all .15s;
+  }
+  .btn-icon:hover { border-color: var(--blue); color: var(--text); }
+
   @media (max-width: 900px) {
     .modules, .kpi-strip { grid-template-columns: 1fr 1fr; }
   }
@@ -138,7 +168,35 @@
     <a href="/mitra.html">Mitra</a>
     <a href="/api/docs" target="_blank">API Docs</a>
   </div>
+  <button class="btn-icon" onclick="abrirConfig()" title="Configuración de rutas" style="margin-left:auto;">⚙️</button>
 </nav>
+
+<!-- MODAL CONFIGURACIÓN -->
+<div class="modal-overlay" id="modal-config">
+  <div class="modal">
+    <h2>⚙️ Configuración de Rutas</h2>
+    <div class="form-row">
+      <label>Carpeta de datos (data_dir)</label>
+      <input type="text" id="cfg-data-dir" placeholder="Ej: C:/VALORACION/data o J:/VALORACION/DATOS"/>
+      <div class="hint" id="cfg-dir-hint">Ingresa la ruta donde están las carpetas por fecha (YYYYMMDD/)</div>
+    </div>
+    <div class="form-row">
+      <label>Umbral variación de precio (%)</label>
+      <input type="number" id="cfg-umbral-pct" step="0.5" min="0.5" max="50"/>
+      <div class="hint">Variaciones por encima de este % se marcan como anormales</div>
+    </div>
+    <div class="form-row">
+      <label>Umbral diferencia causación (COP)</label>
+      <input type="number" id="cfg-umbral-caus" step="0.5" min="0"/>
+      <div class="hint">Diferencia mínima en causación para generar alerta</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="cerrarConfig()">Cancelar</button>
+      <button class="btn" onclick="verificarRuta()">Verificar ruta</button>
+      <button class="btn" onclick="guardarConfig()">💾 Guardar</button>
+    </div>
+  </div>
+</div>
 
 <div class="hero">
   <h1>Control Operativo de <span>Valoración</span></h1>
@@ -263,6 +321,79 @@ async function cargarResumen() {
 }
 
 cargarFechas();
+
+// ── Configuración ───────────────────────────────────────────────────────
+async function abrirConfig() {
+  try {
+    const cfg = await fetchJSON('/api/config');
+    document.getElementById('cfg-data-dir').value   = cfg.data_dir || '';
+    document.getElementById('cfg-umbral-pct').value  = cfg.umbral_variacion_pct ?? 5;
+    document.getElementById('cfg-umbral-caus').value = cfg.umbral_dif_causacion ?? 1;
+    const hint = document.getElementById('cfg-dir-hint');
+    hint.textContent = cfg.data_dir_exists ? '✓ Carpeta encontrada' : '⚠ Carpeta no encontrada';
+    hint.className = 'hint ' + (cfg.data_dir_exists ? 'ok' : 'err');
+  } catch(e) {
+    console.error('Error cargando config:', e);
+  }
+  document.getElementById('modal-config').classList.add('open');
+}
+
+function cerrarConfig() {
+  document.getElementById('modal-config').classList.remove('open');
+}
+
+async function verificarRuta() {
+  const dir = document.getElementById('cfg-data-dir').value.trim();
+  if (!dir) return;
+  const hint = document.getElementById('cfg-dir-hint');
+  hint.textContent = 'Verificando...';
+  hint.className = 'hint';
+  try {
+    const r = await fetch('/api/config', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({data_dir: dir})
+    });
+    const d = await r.json();
+    const existe = d.config?.data_dir_exists ?? false;
+    // Re-fetch para verificar
+    const cfg = await fetchJSON('/api/config');
+    hint.textContent = cfg.data_dir_exists ? '✓ Carpeta encontrada y guardada' : '⚠ Carpeta no encontrada (se guardó de todas formas)';
+    hint.className = 'hint ' + (cfg.data_dir_exists ? 'ok' : 'err');
+  } catch(e) {
+    hint.textContent = 'Error al verificar: ' + e.message;
+    hint.className = 'hint err';
+  }
+}
+
+async function guardarConfig() {
+  const body = {
+    data_dir: document.getElementById('cfg-data-dir').value.trim() || undefined,
+    umbral_variacion_pct: parseFloat(document.getElementById('cfg-umbral-pct').value) || undefined,
+    umbral_dif_causacion: parseFloat(document.getElementById('cfg-umbral-caus').value) || undefined,
+  };
+  try {
+    const r = await fetch('/api/config', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body)
+    });
+    const d = await r.json();
+    if (d.ok) {
+      cerrarConfig();
+      cargarFechas(); // Recargar con la nueva ruta
+    } else {
+      alert('Error guardando configuración: ' + (d.msg || 'desconocido'));
+    }
+  } catch(e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+// Cerrar modal al hacer click fuera
+document.getElementById('modal-config').addEventListener('click', function(e) {
+  if (e.target === this) cerrarConfig();
+});
 </script>
 </body>
 </html>
