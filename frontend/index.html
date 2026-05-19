@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>MVALORACION — Control Operativo</title>
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg: #0d1117; --surface: #161b22; --surface2: #21262d;
+    --border: #30363d; --text: #e6edf3; --muted: #8b949e;
+    --green: #3fb950; --blue: #58a6ff; --orange: #f0883e;
+    --red: #f85149; --purple: #bc8cff; --yellow: #e3b341;
+    --accent: #1f6feb;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  /* TOP NAV */
+  nav {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 0 2rem; display: flex; align-items: center; gap: 2rem;
+    height: 56px; position: sticky; top: 0; z-index: 100;
+  }
+  .nav-logo { font-weight: 700; font-size: 1.1rem; color: var(--blue); letter-spacing: .05em; }
+  .nav-logo span { color: var(--green); }
+  .nav-links { display: flex; gap: .25rem; }
+  .nav-links a {
+    color: var(--muted); text-decoration: none; padding: .4rem .9rem;
+    border-radius: 6px; font-size: .875rem; font-weight: 500; transition: all .15s;
+  }
+  .nav-links a:hover, .nav-links a.active { background: var(--surface2); color: var(--text); }
+  .nav-links a.active { border-bottom: 2px solid var(--blue); border-radius: 6px 6px 0 0; }
+
+  /* HERO */
+  .hero {
+    padding: 4rem 2rem 2rem;
+    background: radial-gradient(ellipse at 60% 0%, #1f6feb22 0%, transparent 60%);
+    text-align: center;
+  }
+  .hero h1 { font-size: 2.4rem; font-weight: 700; margin-bottom: .75rem; }
+  .hero h1 span { color: var(--blue); }
+  .hero p { color: var(--muted); font-size: 1.05rem; max-width: 600px; margin: 0 auto; }
+
+  /* DATE SELECTOR */
+  .date-bar {
+    display: flex; align-items: center; justify-content: center; gap: 1rem;
+    padding: 1.5rem 2rem; background: var(--surface);
+    border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+  }
+  .date-bar label { color: var(--muted); font-size: .875rem; }
+  .date-bar select, .date-bar input {
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+    padding: .45rem .9rem; border-radius: 6px; font-size: .875rem; font-family: inherit;
+    cursor: pointer;
+  }
+  .date-bar select:focus, .date-bar input:focus { outline: none; border-color: var(--blue); }
+  .btn {
+    background: var(--accent); color: #fff; border: none; padding: .45rem 1.2rem;
+    border-radius: 6px; font-size: .875rem; font-weight: 500; cursor: pointer;
+    font-family: inherit; transition: opacity .15s;
+  }
+  .btn:hover { opacity: .85; }
+  .btn-ghost { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+
+  /* CARDS MÓDULOS */
+  .modules { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; padding: 2rem; max-width: 1200px; margin: 0 auto; }
+  .module-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 1.75rem; transition: all .2s; cursor: pointer; text-decoration: none; color: var(--text);
+    display: block;
+  }
+  .module-card:hover { border-color: var(--blue); transform: translateY(-2px); box-shadow: 0 8px 24px #0004; }
+  .module-icon { font-size: 2rem; margin-bottom: 1rem; }
+  .module-card h2 { font-size: 1.15rem; font-weight: 600; margin-bottom: .5rem; }
+  .module-card p { color: var(--muted); font-size: .875rem; line-height: 1.5; }
+  .module-badge {
+    display: inline-block; margin-top: 1rem; padding: .2rem .6rem;
+    border-radius: 20px; font-size: .75rem; font-weight: 600;
+  }
+  .badge-blue { background: #1f6feb33; color: var(--blue); }
+  .badge-green { background: #3fb95033; color: var(--green); }
+  .badge-orange { background: #f0883e33; color: var(--orange); }
+
+  /* KPI STRIP */
+  .kpi-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; padding: 0 2rem 2rem; max-width: 1200px; margin: 0 auto; }
+  .kpi {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 1.25rem 1.5rem;
+  }
+  .kpi-label { color: var(--muted); font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; margin-bottom: .4rem; }
+  .kpi-value { font-size: 1.6rem; font-weight: 700; }
+  .kpi-sub { color: var(--muted); font-size: .8rem; margin-top: .25rem; }
+  .kpi-value.ok { color: var(--green); }
+  .kpi-value.warn { color: var(--yellow); }
+  .kpi-value.err { color: var(--red); }
+
+  /* ACTIVIDAD */
+  .section { padding: 0 2rem 2rem; max-width: 1200px; margin: 0 auto; }
+  .section-title { font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  .activity-list { display: flex; flex-direction: column; gap: .5rem; }
+  .activity-item {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: .85rem 1.25rem; display: flex; align-items: center; gap: 1rem; font-size: .875rem;
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .dot-green { background: var(--green); }
+  .dot-yellow { background: var(--yellow); }
+  .dot-red { background: var(--red); }
+  .activity-item .ts { color: var(--muted); font-size: .8rem; margin-left: auto; white-space: nowrap; }
+
+  /* SPINNER */
+  .spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid var(--border); border-top-color: var(--blue); border-radius: 50%; animation: spin .6s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* FOOTER */
+  footer { text-align: center; color: var(--muted); font-size: .8rem; padding: 2rem; border-top: 1px solid var(--border); margin-top: 2rem; }
+
+  @media (max-width: 900px) {
+    .modules, .kpi-strip { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 600px) {
+    .modules, .kpi-strip { grid-template-columns: 1fr; }
+    nav { gap: 1rem; padding: 0 1rem; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-logo">M<span>VALORACION</span></div>
+  <div class="nav-links">
+    <a href="/" class="active">Inicio</a>
+    <a href="/insumos.html">Insumos</a>
+    <a href="/porfin.html">Porfin</a>
+    <a href="/mitra.html">Mitra</a>
+    <a href="/api/docs" target="_blank">API Docs</a>
+  </div>
+</nav>
+
+<div class="hero">
+  <h1>Control Operativo de <span>Valoración</span></h1>
+  <p>Revisión de insumos, precios, causaciones y validaciones diarias para Porfin y Mitra</p>
+</div>
+
+<div class="date-bar">
+  <label>Fecha de revisión:</label>
+  <select id="sel-fecha"><option value="">Cargando...</option></select>
+  <button class="btn" onclick="cargarResumen()">Actualizar Dashboard</button>
+</div>
+
+<!-- KPIs -->
+<div class="kpi-strip" id="kpi-strip">
+  <div class="kpi"><div class="kpi-label">Archivos Disponibles</div><div class="kpi-value" id="kpi-archivos">—</div><div class="kpi-sub">en la fecha seleccionada</div></div>
+  <div class="kpi"><div class="kpi-label">Alertas Porfin</div><div class="kpi-value" id="kpi-alertas-porfin">—</div><div class="kpi-sub">errores detectados</div></div>
+  <div class="kpi"><div class="kpi-label">Alertas Mitra</div><div class="kpi-value" id="kpi-alertas-mitra">—</div><div class="kpi-sub">precios + causaciones</div></div>
+  <div class="kpi"><div class="kpi-label">Proveedores Activos</div><div class="kpi-value" id="kpi-proveedores">—</div><div class="kpi-sub">SP, SW, MX, TP, NOTAS</div></div>
+</div>
+
+<!-- MÓDULOS -->
+<div class="modules">
+  <a class="module-card" href="/insumos.html">
+    <div class="module-icon">📊</div>
+    <h2>Insumos y Proveedores</h2>
+    <p>Compara precios entre SP, SW, MX, TP y NOTAS. Detecta variaciones anormales, títulos sin precio y diferencias entre fuentes.</p>
+    <div><span class="module-badge badge-blue">Comparador</span> <span class="module-badge badge-blue">Variaciones</span></div>
+  </a>
+  <a class="module-card" href="/porfin.html">
+    <div class="module-icon">🟢</div>
+    <h2>Revisión Porfin (596/575)</h2>
+    <p>Valida que los precios están bien cargados, la valoración es correcta según Circular 575/596, y revisa causaciones vs Infovalmer.</p>
+    <div><span class="module-badge badge-green">596</span> <span class="module-badge badge-green">575</span> <span class="module-badge badge-green">Errores</span></div>
+  </a>
+  <a class="module-card" href="/mitra.html">
+    <div class="module-icon">🔵</div>
+    <h2>Revisión Mitra</h2>
+    <p>Revisa VALORACION_DI/DF, causaciones, fuentes de precio, diferencias vs Porfin y observaciones automáticas por título.</p>
+    <div><span class="module-badge badge-orange">DI/DF</span> <span class="module-badge badge-orange">Causaciones</span> <span class="module-badge badge-orange">vs Porfin</span></div>
+  </a>
+</div>
+
+<!-- ACTIVIDAD RECIENTE -->
+<div class="section">
+  <div class="section-title">Estado de archivos — fecha seleccionada</div>
+  <div class="activity-list" id="activity-list">
+    <div class="activity-item"><div class="spinner"></div><span>Cargando estado...</span></div>
+  </div>
+</div>
+
+<footer>MVALORACION © 2026 — Skandia Colombia · Valoración Financiera</footer>
+
+<script>
+const API = '';
+
+async function fetchJSON(url) {
+  const r = await fetch(API + url);
+  if (!r.ok) throw new Error(r.statusText);
+  return r.json();
+}
+
+async function cargarFechas() {
+  const sel = document.getElementById('sel-fecha');
+  try {
+    const data = await fetchJSON('/api/insumos/fechas');
+    const fechas = (data.fechas || []).reverse();
+    sel.innerHTML = fechas.map(f => `<option value="${f}">${f.slice(0,4)}-${f.slice(4,6)}-${f.slice(6)}</option>`).join('');
+    if (fechas.length) cargarResumen();
+  } catch(e) {
+    sel.innerHTML = '<option value="">Error cargando fechas</option>';
+  }
+}
+
+async function cargarResumen() {
+  const fecha = document.getElementById('sel-fecha').value;
+  if (!fecha) return;
+
+  // Archivos disponibles
+  try {
+    const data = await fetchJSON(`/api/insumos/archivos_disponibles/${fecha}`);
+    const activos = Object.values(data).filter(v => v.disponible).length;
+    const total   = Object.keys(data).length;
+    const el = document.getElementById('kpi-archivos');
+    el.textContent = `${activos}/${total}`;
+    el.className = 'kpi-value ' + (activos >= 4 ? 'ok' : activos >= 2 ? 'warn' : 'err');
+    document.getElementById('kpi-proveedores').textContent = activos;
+    document.getElementById('kpi-proveedores').className = 'kpi-value ' + (activos >= 3 ? 'ok' : 'warn');
+
+    // Activity list
+    const list = document.getElementById('activity-list');
+    list.innerHTML = Object.entries(data).map(([nombre, info]) => `
+      <div class="activity-item">
+        <div class="dot ${info.disponible ? 'dot-green' : 'dot-red'}"></div>
+        <span><strong>${nombre}</strong> — ${info.disponible ? `${info.filas} registros` : 'No disponible'}</span>
+        <span class="ts">${fecha.slice(0,4)}-${fecha.slice(4,6)}-${fecha.slice(6)}</span>
+      </div>
+    `).join('');
+  } catch(e) {
+    document.getElementById('activity-list').innerHTML = `<div class="activity-item"><div class="dot dot-red"></div><span>Error: ${e.message}</span></div>`;
+  }
+
+  // KPIs Porfin
+  try {
+    const data = await fetchJSON(`/api/porfin/errores/${fecha}`);
+    const el = document.getElementById('kpi-alertas-porfin');
+    el.textContent = data.total_errores ?? '—';
+    el.className = 'kpi-value ' + (data.total_errores === 0 ? 'ok' : data.total_errores < 10 ? 'warn' : 'err');
+  } catch(e) {
+    document.getElementById('kpi-alertas-porfin').textContent = '—';
+  }
+
+  // KPIs Mitra
+  try {
+    const data = await fetchJSON(`/api/mitra/resumen/${fecha}`);
+    const alertas = (data.alertas_causacion || 0) + (data.alertas_precio || 0) + (data.sin_precio || 0);
+    const el = document.getElementById('kpi-alertas-mitra');
+    el.textContent = alertas;
+    el.className = 'kpi-value ' + (alertas === 0 ? 'ok' : alertas < 10 ? 'warn' : 'err');
+  } catch(e) {
+    document.getElementById('kpi-alertas-mitra').textContent = '—';
+  }
+}
+
+cargarFechas();
+</script>
+</body>
+</html>

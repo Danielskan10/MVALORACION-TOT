@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Insumos — MVALORACION</title>
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+  :root { --bg:#0d1117;--surface:#161b22;--surface2:#21262d;--border:#30363d;--text:#e6edf3;--muted:#8b949e;--green:#3fb950;--blue:#58a6ff;--orange:#f0883e;--red:#f85149;--purple:#bc8cff;--yellow:#e3b341;--accent:#1f6feb; }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);}
+  nav{background:var(--surface);border-bottom:1px solid var(--border);padding:0 2rem;display:flex;align-items:center;gap:2rem;height:56px;position:sticky;top:0;z-index:100;}
+  .nav-logo{font-weight:700;font-size:1.1rem;color:var(--blue);letter-spacing:.05em;}
+  .nav-logo span{color:var(--green);}
+  .nav-links{display:flex;gap:.25rem;}
+  .nav-links a{color:var(--muted);text-decoration:none;padding:.4rem .9rem;border-radius:6px;font-size:.875rem;font-weight:500;transition:all .15s;}
+  .nav-links a:hover,.nav-links a.active{background:var(--surface2);color:var(--text);}
+  .nav-links a.active{border-bottom:2px solid var(--blue);border-radius:6px 6px 0 0;}
+  .page-header{padding:2rem;border-bottom:1px solid var(--border);}
+  .page-header h1{font-size:1.5rem;font-weight:700;margin-bottom:.25rem;}
+  .page-header p{color:var(--muted);font-size:.9rem;}
+  .toolbar{display:flex;flex-wrap:wrap;gap:1rem;align-items:center;padding:1rem 2rem;background:var(--surface);border-bottom:1px solid var(--border);}
+  .toolbar label{color:var(--muted);font-size:.8rem;text-transform:uppercase;letter-spacing:.05em;}
+  .toolbar select,.toolbar input{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:.4rem .8rem;border-radius:6px;font-size:.875rem;font-family:inherit;}
+  .toolbar select:focus,.toolbar input:focus{outline:none;border-color:var(--blue);}
+  .btn{background:var(--accent);color:#fff;border:none;padding:.4rem 1.1rem;border-radius:6px;font-size:.875rem;font-weight:500;cursor:pointer;font-family:inherit;transition:opacity .15s;}
+  .btn:hover{opacity:.85;}
+  .btn-ghost{background:var(--surface2);color:var(--text);border:1px solid var(--border);}
+  .btn-red{background:#b91c1c;}
+  .content{padding:1.5rem 2rem;max-width:1400px;margin:0 auto;}
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:1.5rem;}
+  .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:1.5rem;}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.25rem;}
+  .card-title{font-size:.85rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:1rem;display:flex;align-items:center;gap:.5rem;}
+  .kpi-mini{background:var(--surface2);border-radius:8px;padding:1rem 1.25rem;}
+  .kpi-mini .label{color:var(--muted);font-size:.78rem;text-transform:uppercase;letter-spacing:.04em;margin-bottom:.3rem;}
+  .kpi-mini .val{font-size:1.5rem;font-weight:700;}
+  .ok{color:#3fb950;}.warn{color:#e3b341;}.err{color:#f85149;}
+  .badge{display:inline-block;padding:.15rem .5rem;border-radius:4px;font-size:.75rem;font-weight:600;}
+  .badge-blue{background:#1f6feb33;color:var(--blue);}
+  .badge-green{background:#3fb95033;color:var(--green);}
+  .badge-red{background:#f8514933;color:var(--red);}
+  .badge-yellow{background:#e3b34133;color:var(--yellow);}
+  /* TABLE */
+  .table-wrap{overflow-x:auto;border-radius:8px;border:1px solid var(--border);}
+  table{width:100%;border-collapse:collapse;font-size:.82rem;}
+  thead tr{background:var(--surface2);}
+  th{padding:.6rem .9rem;text-align:left;color:var(--muted);font-weight:600;font-size:.78rem;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;border-bottom:1px solid var(--border);}
+  td{padding:.55rem .9rem;border-bottom:1px solid var(--border);white-space:nowrap;}
+  tr:last-child td{border-bottom:none;}
+  tr:hover td{background:var(--surface2);}
+  .anormal{color:var(--red);font-weight:600;}
+  .normal{color:var(--green);}
+  .spinner{display:inline-block;width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin .6s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .tabs{display:flex;gap:.25rem;margin-bottom:1rem;border-bottom:1px solid var(--border);}
+  .tab{padding:.5rem 1rem;cursor:pointer;font-size:.875rem;font-weight:500;color:var(--muted);border-bottom:2px solid transparent;transition:all .15s;}
+  .tab.active{color:var(--blue);border-color:var(--blue);}
+  .tab-panel{display:none;}.tab-panel.active{display:block;}
+  .empty{color:var(--muted);text-align:center;padding:2rem;font-size:.9rem;}
+  input[type=range]{accent-color:var(--blue);width:120px;}
+  @media(max-width:900px){.grid-2,.grid-3{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+<nav>
+  <div class="nav-logo">M<span>VALORACION</span></div>
+  <div class="nav-links">
+    <a href="/">Inicio</a>
+    <a href="/insumos.html" class="active">Insumos</a>
+    <a href="/porfin.html">Porfin</a>
+    <a href="/mitra.html">Mitra</a>
+  </div>
+</nav>
+
+<div class="page-header">
+  <h1>📊 Insumos y Proveedores de Precios</h1>
+  <p>Comparación SP · SW · MX · TP · NOTAS — variaciones, diferencias y disponibilidad</p>
+</div>
+
+<div class="toolbar">
+  <div><label>Fecha</label><br/><select id="sel-fecha" onchange="onFechaChange()"><option value="">Cargando...</option></select></div>
+  <div><label>Proveedores</label><br/>
+    <span id="chk-proveedores" style="display:flex;gap:.5rem;align-items:center;margin-top:.25rem;">
+      <label style="color:var(--text)"><input type="checkbox" value="SP" checked> SP</label>
+      <label style="color:var(--text)"><input type="checkbox" value="SW" checked> SW</label>
+      <label style="color:var(--text)"><input type="checkbox" value="MX" checked> MX</label>
+      <label style="color:var(--text)"><input type="checkbox" value="TP" checked> TP</label>
+      <label style="color:var(--text)"><input type="checkbox" value="NOTAS"> NOTAS</label>
+    </span>
+  </div>
+  <div><label>Umbral variación %</label><br/><div style="display:flex;align-items:center;gap:.5rem;"><input type="range" id="umbral" min="1" max="20" value="5" oninput="document.getElementById('umbral-val').textContent=this.value+'%'"><span id="umbral-val" style="color:var(--text);font-size:.875rem;">5%</span></div></div>
+  <div><label>Proveedor variación</label><br/><select id="sel-prov-var"><option value="SP">SP</option><option value="SW">SW</option><option value="MX">MX</option><option value="TP">TP</option></select></div>
+  <div><label>Fecha anterior</label><br/><select id="sel-fecha-ant"><option value="">Seleccione...</option></select></div>
+  <button class="btn" onclick="cargarTodo()">🔄 Actualizar</button>
+  <div style="margin-left:auto;"><label>Buscar</label><br/><input type="text" id="busqueda" placeholder="ISIN / NEMO..." style="width:180px;" oninput="filtrarTabla()"/></div>
+</div>
+
+<div class="content">
+  <!-- KPIs -->
+  <div class="grid-3" id="kpi-row">
+    <div class="kpi-mini"><div class="label">Total Títulos SP</div><div class="val" id="kpi-sp">—</div></div>
+    <div class="kpi-mini"><div class="label">Total Títulos SW</div><div class="val" id="kpi-sw">—</div></div>
+    <div class="kpi-mini"><div class="label">Total Títulos MX</div><div class="val" id="kpi-mx">—</div></div>
+  </div>
+
+  <!-- GRÁFICAS -->
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">📦 Títulos por Proveedor</div>
+      <div id="chart-proveedores" style="height:260px;"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">📉 Top Variaciones de Precio</div>
+      <div id="chart-variaciones" style="height:260px;"></div>
+    </div>
+  </div>
+
+  <!-- TABS -->
+  <div class="card">
+    <div class="tabs">
+      <div class="tab active" onclick="showTab('tab-comparacion',this)">Comparación entre fuentes</div>
+      <div class="tab" onclick="showTab('tab-variaciones',this)">Variaciones día anterior</div>
+      <div class="tab" onclick="showTab('tab-titulos',this)">Listado de títulos</div>
+    </div>
+
+    <div class="tab-panel active" id="tab-comparacion">
+      <p style="color:var(--muted);font-size:.85rem;margin-bottom:1rem;">Cruza los proveedores seleccionados por ISIN/NEMO y calcula diferencias de precio entre fuentes.</p>
+      <div class="table-wrap" id="wrap-comparacion"><div class="empty"><span class="spinner"></span></div></div>
+    </div>
+
+    <div class="tab-panel" id="tab-variaciones">
+      <p style="color:var(--muted);font-size:.85rem;margin-bottom:1rem;">Variación de precios del proveedor seleccionado entre la fecha actual y la anterior. Las filas en <span class="anormal">rojo</span> superan el umbral configurado.</p>
+      <div class="table-wrap" id="wrap-variaciones"><div class="empty">Selecciona dos fechas para comparar</div></div>
+    </div>
+
+    <div class="tab-panel" id="tab-titulos">
+      <div style="display:flex;gap:.75rem;margin-bottom:1rem;">
+        <select id="sel-prov-lista" onchange="cargarTitulos()"><option value="SP">SP</option><option value="SW">SW</option><option value="MX">MX</option><option value="TP">TP</option><option value="NOTAS">NOTAS</option></select>
+        <input type="text" id="bus-titulo" placeholder="Buscar..." style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:.4rem .8rem;border-radius:6px;font-size:.875rem;" oninput="cargarTitulos()"/>
+      </div>
+      <div class="table-wrap" id="wrap-titulos"><div class="empty"><span class="spinner"></span></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '';
+let _comparacion = [];
+
+function fmt(v,d=4){return v==null?'—':typeof v==='number'?v.toLocaleString('es-CO',{minimumFractionDigits:d,maximumFractionDigits:d}):v;}
+function fmtPct(v){if(v==null)return'—';const cls=Math.abs(v)>5?'anormal':'normal';return `<span class="${cls}">${v.toFixed(4)}%</span>`;}
+
+function showTab(id,el){
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  el.classList.add('active');
+}
+
+async function fetchJSON(url){const r=await fetch(API+url);if(!r.ok)throw new Error(r.statusText);return r.json();}
+
+async function cargarFechas(){
+  const sel=document.getElementById('sel-fecha');
+  const selAnt=document.getElementById('sel-fecha-ant');
+  try{
+    const data=await fetchJSON('/api/insumos/fechas');
+    const f=(data.fechas||[]).reverse();
+    sel.innerHTML=f.map(x=>`<option value="${x}">${x.slice(0,4)}-${x.slice(4,6)}-${x.slice(6)}</option>`).join('');
+    selAnt.innerHTML='<option value="">— ninguna —</option>'+f.map(x=>`<option value="${x}">${x.slice(0,4)}-${x.slice(4,6)}-${x.slice(6)}</option>`).join('');
+    if(f.length>1) selAnt.value=f[1];
+    if(f.length) cargarTodo();
+  }catch(e){sel.innerHTML='<option>Error</option>';}
+}
+
+function onFechaChange(){cargarTodo();}
+
+async function cargarTodo(){
+  const fecha=document.getElementById('sel-fecha').value;
+  if(!fecha)return;
+  await Promise.all([cargarResumenProveedores(fecha),cargarComparacion(fecha),cargarVariaciones(),cargarTitulos()]);
+}
+
+async function cargarResumenProveedores(fecha){
+  try{
+    const data=await fetchJSON(`/api/insumos/resumen/${fecha}`);
+    const colores={'SP':{'color':'#58a6ff'},'SW':{'color':'#3fb950'},'MX':{'color':'#f0883e'},'TP':{'color':'#bc8cff'},'NOTAS':{'color':'#e3b341'}};
+    const names=data.map(d=>d.proveedor);
+    const vals=data.map(d=>d.total_titulos);
+    const colors=names.map(n=>(colores[n]||{color:'#8b949e'}).color);
+    Plotly.newPlot('chart-proveedores',[{type:'bar',x:names,y:vals,marker:{color:colors},text:vals,textposition:'auto'}],
+      {paper_bgcolor:'transparent',plot_bgcolor:'transparent',font:{color:'#e6edf3',size:11},
+       margin:{t:10,b:30,l:40,r:10},xaxis:{gridcolor:'#30363d'},yaxis:{gridcolor:'#30363d'}},{responsive:true,displayModeBar:false});
+    data.forEach(d=>{
+      const el=document.getElementById('kpi-'+d.proveedor.toLowerCase());
+      if(el){el.textContent=d.total_titulos;el.className='val '+(d.total_titulos>0?'ok':'err');}
+    });
+  }catch(e){console.error(e);}
+}
+
+async function cargarComparacion(fecha){
+  const provs=[...document.querySelectorAll('#chk-proveedores input:checked')].map(i=>i.value).join(',');
+  const wrap=document.getElementById('wrap-comparacion');
+  wrap.innerHTML='<div class="empty"><span class="spinner"></span> Cargando...</div>';
+  try{
+    _comparacion=await fetchJSON(`/api/insumos/comparacion/${fecha}?proveedores=${encodeURIComponent(provs)}`);
+    renderTablaComparacion(_comparacion);
+  }catch(e){wrap.innerHTML=`<div class="empty">Error: ${e.message}</div>`;}
+}
+
+function renderTablaComparacion(data){
+  if(!data.length){document.getElementById('wrap-comparacion').innerHTML='<div class="empty">Sin datos</div>';return;}
+  const cols=Object.keys(data[0]).filter(c=>c!=='FUENTES_DISPONIBLES');
+  let html=`<table><thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}<th>FUENTES</th></tr></thead><tbody>`;
+  data.slice(0,500).forEach(row=>{
+    const alert=row.DIF_PCT!=null&&Math.abs(row.DIF_PCT)>5;
+    html+=`<tr style="${alert?'background:#f8514911;':''}">`+cols.map(c=>{
+      const v=row[c];
+      if(c==='DIF_PCT')return`<td>${fmtPct(v)}</td>`;
+      if(typeof v==='number')return`<td>${fmt(v)}</td>`;
+      return`<td>${v??'—'}</td>`;
+    }).join('')+`<td><span class="badge badge-${row.FUENTES_DISPONIBLES>=3?'green':row.FUENTES_DISPONIBLES>=2?'blue':'red'}">${row.FUENTES_DISPONIBLES??0}</span></td></tr>`;
+  });
+  html+='</tbody></table>';
+  document.getElementById('wrap-comparacion').innerHTML=html;
+}
+
+function filtrarTabla(){
+  const q=document.getElementById('busqueda').value.trim().toUpperCase();
+  if(!q){renderTablaComparacion(_comparacion);return;}
+  renderTablaComparacion(_comparacion.filter(r=>String(r.ID||'').includes(q)));
+}
+
+async function cargarVariaciones(){
+  const fechaFin=document.getElementById('sel-fecha').value;
+  const fechaIni=document.getElementById('sel-fecha-ant').value;
+  const prov=document.getElementById('sel-prov-var').value;
+  const umbral=document.getElementById('umbral').value;
+  const wrap=document.getElementById('wrap-variaciones');
+  if(!fechaIni||!fechaFin||fechaIni===fechaFin){wrap.innerHTML='<div class="empty">Selecciona dos fechas distintas</div>';return;}
+  wrap.innerHTML='<div class="empty"><span class="spinner"></span></div>';
+  try{
+    const data=await fetchJSON(`/api/insumos/variaciones/${fechaIni}/${fechaFin}?proveedor=${prov}&umbral_pct=${umbral}`);
+    if(!data.length){wrap.innerHTML='<div class="empty">Sin variaciones para ese rango</div>';return;}
+
+    // Chart top 15
+    const top=data.slice(0,15);
+    Plotly.newPlot('chart-variaciones',[{type:'bar',x:top.map(d=>d.ID),y:top.map(d=>d.VAR_PCT),
+      marker:{color:top.map(d=>d.ANORMAL?'#f85149':'#3fb950')},text:top.map(d=>d.VAR_PCT.toFixed(2)+'%'),textposition:'auto'}],
+      {paper_bgcolor:'transparent',plot_bgcolor:'transparent',font:{color:'#e6edf3',size:10},
+       margin:{t:10,b:60,l:50,r:10},xaxis:{gridcolor:'#30363d',tickangle:-45},yaxis:{gridcolor:'#30363d',ticksuffix:'%'}},{responsive:true,displayModeBar:false});
+
+    let html=`<table><thead><tr><th>ID</th><th>Precio ${fechaIni}</th><th>Precio ${fechaFin}</th><th>VAR ABS</th><th>VAR %</th><th>Estado</th></tr></thead><tbody>`;
+    data.forEach(r=>{
+      html+=`<tr><td><strong>${r.ID}</strong></td><td>${fmt(r.PRECIO_INICIO)}</td><td>${fmt(r.PRECIO_FIN)}</td><td>${fmt(r.VAR_ABS)}</td><td>${fmtPct(r.VAR_PCT)}</td>
+      <td><span class="badge ${r.ANORMAL?'badge-red':'badge-green'}">${r.ANORMAL?'⚠ ANORMAL':'OK'}</span></td></tr>`;
+    });
+    html+='</tbody></table>';
+    wrap.innerHTML=html;
+  }catch(e){wrap.innerHTML=`<div class="empty">Error: ${e.message}</div>`;}
+}
+
+async function cargarTitulos(){
+  const fecha=document.getElementById('sel-fecha').value;
+  const prov=document.getElementById('sel-prov-lista').value;
+  const bus=document.getElementById('bus-titulo').value;
+  const wrap=document.getElementById('wrap-titulos');
+  if(!fecha)return;
+  wrap.innerHTML='<div class="empty"><span class="spinner"></span></div>';
+  try{
+    const url=`/api/insumos/titulos/${fecha}?proveedor=${prov}`+(bus?`&busqueda=${encodeURIComponent(bus)}`:'');
+    const data=await fetchJSON(url);
+    if(!data.length){wrap.innerHTML='<div class="empty">Sin datos</div>';return;}
+    const cols=Object.keys(data[0]);
+    let html=`<table><thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>`;
+    data.forEach(row=>{
+      html+=`<tr>${cols.map(c=>{const v=row[c];return`<td>${typeof v==='number'?fmt(v,6):v??'—'}</td>`;}).join('')}</tr>`;
+    });
+    html+='</tbody></table>';
+    wrap.innerHTML=html;
+  }catch(e){wrap.innerHTML=`<div class="empty">Error: ${e.message}</div>`;}
+}
+
+cargarFechas();
+</script>
+</body>
+</html>

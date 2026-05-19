@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Porfin — MVALORACION</title>
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+  :root{--bg:#0d1117;--surface:#161b22;--surface2:#21262d;--border:#30363d;--text:#e6edf3;--muted:#8b949e;--green:#3fb950;--blue:#58a6ff;--orange:#f0883e;--red:#f85149;--purple:#bc8cff;--yellow:#e3b341;--accent:#1f6feb;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);}
+  nav{background:var(--surface);border-bottom:1px solid var(--border);padding:0 2rem;display:flex;align-items:center;gap:2rem;height:56px;position:sticky;top:0;z-index:100;}
+  .nav-logo{font-weight:700;font-size:1.1rem;color:var(--blue);}
+  .nav-logo span{color:var(--green);}
+  .nav-links{display:flex;gap:.25rem;}
+  .nav-links a{color:var(--muted);text-decoration:none;padding:.4rem .9rem;border-radius:6px;font-size:.875rem;font-weight:500;transition:all .15s;}
+  .nav-links a:hover,.nav-links a.active{background:var(--surface2);color:var(--text);}
+  .nav-links a.active{border-bottom:2px solid var(--green);border-radius:6px 6px 0 0;}
+  .page-header{padding:2rem;border-bottom:1px solid var(--border);}
+  .page-header h1{font-size:1.5rem;font-weight:700;margin-bottom:.25rem;}
+  .page-header p{color:var(--muted);font-size:.9rem;}
+  .toolbar{display:flex;flex-wrap:wrap;gap:1rem;align-items:flex-end;padding:1rem 2rem;background:var(--surface);border-bottom:1px solid var(--border);}
+  .toolbar label{color:var(--muted);font-size:.78rem;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:.2rem;}
+  .toolbar select,.toolbar input{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:.4rem .8rem;border-radius:6px;font-size:.875rem;font-family:inherit;}
+  .btn{background:var(--accent);color:#fff;border:none;padding:.4rem 1.1rem;border-radius:6px;font-size:.875rem;font-weight:500;cursor:pointer;font-family:inherit;transition:opacity .15s;}
+  .btn:hover{opacity:.85;}
+  .btn-ghost{background:var(--surface2);color:var(--text);border:1px solid var(--border);}
+  .content{padding:1.5rem 2rem;max-width:1400px;margin:0 auto;}
+  .kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:1rem;margin-bottom:1.5rem;}
+  .kpi{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.25rem;}
+  .kpi .label{color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.04em;margin-bottom:.3rem;}
+  .kpi .val{font-size:1.4rem;font-weight:700;}
+  .kpi .sub{color:var(--muted);font-size:.75rem;margin-top:.2rem;}
+  .ok{color:#3fb950;}.warn{color:#e3b341;}.err{color:#f85149;}
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:1.5rem;}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.25rem;}
+  .card-title{font-size:.82rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:.9rem;display:flex;align-items:center;gap:.5rem;}
+  .tabs{display:flex;gap:.25rem;margin-bottom:1rem;border-bottom:1px solid var(--border);}
+  .tab{padding:.5rem 1rem;cursor:pointer;font-size:.875rem;font-weight:500;color:var(--muted);border-bottom:2px solid transparent;transition:all .15s;}
+  .tab.active{color:var(--green);border-color:var(--green);}
+  .tab-panel{display:none;}.tab-panel.active{display:block;}
+  .table-wrap{overflow-x:auto;border-radius:8px;border:1px solid var(--border);}
+  table{width:100%;border-collapse:collapse;font-size:.8rem;}
+  thead tr{background:var(--surface2);}
+  th{padding:.55rem .9rem;text-align:left;color:var(--muted);font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;border-bottom:1px solid var(--border);}
+  td{padding:.5rem .9rem;border-bottom:1px solid var(--border);white-space:nowrap;}
+  tr:last-child td{border-bottom:none;}
+  tr:hover td{background:var(--surface2);}
+  .badge{display:inline-block;padding:.15rem .5rem;border-radius:4px;font-size:.72rem;font-weight:600;}
+  .badge-green{background:#3fb95033;color:var(--green);}
+  .badge-red{background:#f8514933;color:var(--red);}
+  .badge-yellow{background:#e3b34133;color:var(--yellow);}
+  .badge-blue{background:#1f6feb33;color:var(--blue);}
+  .badge-orange{background:#f0883e33;color:var(--orange);}
+  .sev-ALTO{color:var(--red);font-weight:700;}
+  .sev-MEDIO{color:var(--yellow);font-weight:600;}
+  .sev-BAJO{color:var(--muted);}
+  .spinner{display:inline-block;width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--green);border-radius:50%;animation:spin .6s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .empty{color:var(--muted);text-align:center;padding:2rem;font-size:.9rem;}
+  .filters{display:flex;gap:.75rem;margin-bottom:1rem;flex-wrap:wrap;align-items:center;}
+  .filters select,.filters input{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:.35rem .75rem;border-radius:6px;font-size:.85rem;}
+  .filters label{display:flex;align-items:center;gap:.3rem;font-size:.85rem;color:var(--text);}
+  @media(max-width:900px){.kpi-row{grid-template-columns:repeat(2,1fr);}.grid-2{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+<nav>
+  <div class="nav-logo">M<span>VALORACION</span></div>
+  <div class="nav-links">
+    <a href="/">Inicio</a>
+    <a href="/insumos.html">Insumos</a>
+    <a href="/porfin.html" class="active">Porfin</a>
+    <a href="/mitra.html">Mitra</a>
+  </div>
+</nav>
+
+<div class="page-header">
+  <h1>🟢 Revisión Porfin — 596 / 575</h1>
+  <p>Validación de precios, valoración según Circulares 575/596, causaciones y detección de errores operativos</p>
+</div>
+
+<div class="toolbar">
+  <div><label>Fecha</label><select id="sel-fecha" onchange="cargarTodo()"><option value="">Cargando...</option></select></div>
+  <div><label>Fecha anterior (variaciones)</label><select id="sel-fecha-ant"><option value="">— ninguna —</option></select></div>
+  <div><label>Umbral variación %</label><input type="number" id="umbral" value="5" min="0" step="0.5" style="width:80px;"/></div>
+  <button class="btn" onclick="cargarTodo()">🔄 Actualizar</button>
+</div>
+
+<div class="content">
+  <!-- KPIs -->
+  <div class="kpi-row">
+    <div class="kpi"><div class="label">Total Posiciones</div><div class="val" id="kpi-total">—</div><div class="sub">en el 596</div></div>
+    <div class="kpi"><div class="label">Val. Hoy (COP)</div><div class="val ok" id="kpi-val-hoy">—</div><div class="sub">suma cartera</div></div>
+    <div class="kpi"><div class="label">Val. Anterior</div><div class="val" id="kpi-val-ant">—</div><div class="sub">día anterior</div></div>
+    <div class="kpi"><div class="label">Alertas Variación</div><div class="val err" id="kpi-alertas-var">—</div><div class="sub">&gt;5% cambio val.</div></div>
+    <div class="kpi"><div class="label">Errores Detectados</div><div class="val err" id="kpi-errores">—</div><div class="sub">sin precio, nulos…</div></div>
+  </div>
+
+  <!-- GRÁFICAS -->
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">🗂 Distribución por Tipo de Activo</div>
+      <div id="chart-tipos" style="height:260px;"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">⚠️ Top Alertas de Variación</div>
+      <div id="chart-alertas" style="height:260px;"></div>
+    </div>
+  </div>
+
+  <!-- TABS -->
+  <div class="card">
+    <div class="tabs">
+      <div class="tab active" onclick="showTab('tab-posiciones',this)">Posiciones 596</div>
+      <div class="tab" onclick="showTab('tab-errores',this)">Errores y Alertas</div>
+      <div class="tab" onclick="showTab('tab-causaciones',this)">Causaciones 575</div>
+      <div class="tab" onclick="showTab('tab-variaciones',this)">Variaciones</div>
+    </div>
+
+    <!-- Posiciones -->
+    <div class="tab-panel active" id="tab-posiciones">
+      <div class="filters">
+        <input type="text" id="bus-pos" placeholder="Buscar ISIN/NEMO..." oninput="cargarPosiciones()"/>
+        <select id="fil-tipo" onchange="cargarPosiciones()"><option value="">Todos los tipos</option></select>
+        <label><input type="checkbox" id="chk-alertas" onchange="cargarPosiciones()"> Solo alertas</label>
+      </div>
+      <div class="table-wrap" id="wrap-posiciones"><div class="empty"><span class="spinner"></span></div></div>
+    </div>
+
+    <!-- Errores -->
+    <div class="tab-panel" id="tab-errores">
+      <div class="filters">
+        <select id="fil-sev"><option value="">Todas las severidades</option><option value="ALTO">ALTO</option><option value="MEDIO">MEDIO</option><option value="BAJO">BAJO</option></select>
+        <input type="text" id="bus-err" placeholder="Filtrar..." oninput="filtrarErrores()"/>
+      </div>
+      <div class="table-wrap" id="wrap-errores"><div class="empty"><span class="spinner"></span></div></div>
+    </div>
+
+    <!-- Causaciones -->
+    <div class="tab-panel" id="tab-causaciones">
+      <div id="resumen-causaciones" style="margin-bottom:1rem;"></div>
+      <div class="table-wrap" id="wrap-causaciones"><div class="empty"><span class="spinner"></span></div></div>
+    </div>
+
+    <!-- Variaciones -->
+    <div class="tab-panel" id="tab-variaciones">
+      <p style="color:var(--muted);font-size:.85rem;margin-bottom:1rem;">Variaciones de valoración entre dos fechas.</p>
+      <div class="table-wrap" id="wrap-var-porfin"><div class="empty">Selecciona dos fechas en la barra superior</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API='';
+let _errores=[];
+
+function fmt(v,d=2){return v==null?'—':typeof v==='number'?v.toLocaleString('es-CO',{minimumFractionDigits:d,maximumFractionDigits:d}):String(v);}
+function fmtCOP(v){return v==null?'—':'$'+fmt(v,0);}
+function fmtPct(v){if(v==null)return'—';const c=Math.abs(v)>5?'err':Math.abs(v)>2?'warn':'ok';return`<span class="${c}">${v.toFixed(4)}%</span>`;}
+function showTab(id,el){document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));document.getElementById(id).classList.add('active');el.classList.add('active');}
+async function fetchJSON(url){const r=await fetch(API+url);if(!r.ok)throw new Error(r.statusText);return r.json();}
+
+async function cargarFechas(){
+  const sel=document.getElementById('sel-fecha');
+  const selAnt=document.getElementById('sel-fecha-ant');
+  try{
+    const data=await fetchJSON('/api/porfin/fechas');
+    const f=(data.fechas||[]).reverse();
+    sel.innerHTML=f.map(x=>`<option value="${x}">${x.slice(0,4)}-${x.slice(4,6)}-${x.slice(6)}</option>`).join('');
+    selAnt.innerHTML='<option value="">— ninguna —</option>'+f.map(x=>`<option value="${x}">${x.slice(0,4)}-${x.slice(4,6)}-${x.slice(6)}</option>`).join('');
+    if(f.length>1)selAnt.value=f[1];
+    if(f.length)cargarTodo();
+  }catch(e){sel.innerHTML='<option>Error</option>';}
+}
+
+async function cargarTodo(){
+  const fecha=document.getElementById('sel-fecha').value;
+  if(!fecha)return;
+  await Promise.all([cargarResumen(fecha),cargarPosiciones(),cargarErrores(fecha),cargarCausaciones(fecha),cargarVariaciones()]);
+}
+
+async function cargarResumen(fecha){
+  try{
+    const d=await fetchJSON(`/api/porfin/resumen/${fecha}`);
+    document.getElementById('kpi-total').textContent=d.total_posiciones??'—';
+    document.getElementById('kpi-val-hoy').textContent=fmtCOP(d.suma_valoracion_hoy);
+    document.getElementById('kpi-val-ant').textContent=fmtCOP(d.suma_valoracion_ant);
+    document.getElementById('kpi-alertas-var').textContent=d.total_alertas??0;
+    document.getElementById('kpi-alertas-var').className='val '+(d.total_alertas>0?'err':'ok');
+
+    if(d.distribucion_tipo&&Object.keys(d.distribucion_tipo).length){
+      const tipos=Object.entries(d.distribucion_tipo).sort((a,b)=>b[1]-a[1]);
+      const colors=['#3fb950','#58a6ff','#f0883e','#bc8cff','#e3b341','#f85149','#79c0ff','#56d364'];
+      Plotly.newPlot('chart-tipos',[{type:'pie',labels:tipos.map(t=>t[0]),values:tipos.map(t=>t[1]),
+        marker:{colors:colors},textinfo:'label+percent',hole:.35}],
+        {paper_bgcolor:'transparent',plot_bgcolor:'transparent',font:{color:'#e6edf3',size:11},
+         legend:{bgcolor:'transparent'},margin:{t:10,b:10,l:10,r:10}},{responsive:true,displayModeBar:false});
+    }
+
+    if(d.alertas_variacion&&d.alertas_variacion.length){
+      const top=d.alertas_variacion.slice(0,12);
+      Plotly.newPlot('chart-alertas',[{type:'bar',x:top.map(r=>r.ISIN||r.NEMO||''),y:top.map(r=>parseFloat(r.VAR_PCT)||0),
+        marker:{color:'#f85149'},text:top.map(r=>(r.VAR_PCT||0).toFixed(2)+'%'),textposition:'auto'}],
+        {paper_bgcolor:'transparent',plot_bgcolor:'transparent',font:{color:'#e6edf3',size:10},
+         margin:{t:10,b:60,l:50,r:10},xaxis:{tickangle:-45,gridcolor:'#30363d'},yaxis:{ticksuffix:'%',gridcolor:'#30363d'}},{responsive:true,displayModeBar:false});
+    }
+
+    // Poblar filtro tipos
+    const filTipo=document.getElementById('fil-tipo');
+    filTipo.innerHTML='<option value="">Todos los tipos</option>'+Object.keys(d.distribucion_tipo||{}).map(t=>`<option value="${t}">${t}</option>`).join('');
+  }catch(e){console.error(e);}
+}
+
+async function cargarPosiciones(){
+  const fecha=document.getElementById('sel-fecha').value;
+  const bus=document.getElementById('bus-pos').value;
+  const tipo=document.getElementById('fil-tipo').value;
+  const soloAlertas=document.getElementById('chk-alertas').checked;
+  const wrap=document.getElementById('wrap-posiciones');
+  wrap.innerHTML='<div class="empty"><span class="spinner"></span></div>';
+  try{
+    let url=`/api/porfin/posiciones/${fecha}?solo_alertas=${soloAlertas}`;
+    if(bus)url+=`&busqueda=${encodeURIComponent(bus)}`;
+    if(tipo)url+=`&tipo=${encodeURIComponent(tipo)}`;
+    const data=await fetchJSON(url);
+    if(!data.length){wrap.innerHTML='<div class="empty">Sin posiciones</div>';return;}
+    const cols=Object.keys(data[0]);
+    let html=`<table><thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>`;
+    data.forEach(r=>{
+      const alerta=r.OBSERVACION&&r.OBSERVACION!=='OK';
+      html+=`<tr style="${alerta?'background:#f8514908;':''}">${cols.map(c=>{
+        const v=r[c];
+        if(c==='OBSERVACION')return`<td><span class="badge ${v==='OK'?'badge-green':'badge-red'}">${v}</span></td>`;
+        if(typeof v==='number')return`<td>${fmt(v,4)}</td>`;
+        return`<td>${v??'—'}</td>`;
+      }).join('')}</tr>`;
+    });
+    html+='</tbody></table>';
+    wrap.innerHTML=html;
+  }catch(e){wrap.innerHTML=`<div class="empty">Error: ${e.message}</div>`;}
+}
+
+async function cargarErrores(fecha){
+  const wrap=document.getElementById('wrap-errores');
+  wrap.innerHTML='<div class="empty"><span class="spinner"></span></div>';
+  try{
+    const data=await fetchJSON(`/api/porfin/errores/${fecha}`);
+    document.getElementById('kpi-errores').textContent=data.total_errores??0;
+    document.getElementById('kpi-errores').className='val '+(data.total_errores>0?'err':'ok');
+    _errores=data.errores||[];
+    filtrarErrores();
+  }catch(e){wrap.innerHTML=`<div class="empty">Error: ${e.message}</div>`;}
+}
+
+function filtrarErrores(){
+  const sev=document.getElementById('fil-sev').value;
+  const bus=document.getElementById('bus-err').value.toUpperCase();
+  let data=_errores;
+  if(sev)data=data.filter(r=>r.severidad===sev);
+  if(bus)data=data.filter(r=>Object.values(r).some(v=>String(v).toUpperCase().includes(bus)));
+  if(!data.length){document.getElementById('wrap-errores').innerHTML='<div class="empty">Sin errores con ese filtro</div>';return;}
+  let html=`<table><thead><tr><th>Tipo Error</th><th>ISIN</th><th>NEMO</th><th>Tipo Activo</th><th>Detalle</th><th>Severidad</th></tr></thead><tbody>`;
+  data.forEach(r=>{
+    html+=`<tr><td><strong>${r.tipo_error}</strong></td><td>${r.isin||'—'}</td><td>${r.nemo||'—'}</td><td>${r.tipo_activo||'—'}</td>
+    <td style="max-width:280px;white-space:normal;">${r.detalle}</td>
+    <td><span class="sev-${r.severidad}">${r.severidad}</span></td></tr>`;
+  });
+  html+='</tbody></table>';
+  document.getElementById('wrap-errores').innerHTML=html;
+}
+
+async function cargarCausaciones(fecha){
+  const wrap=document.getElementById('wrap-causaciones');
+  wrap.innerHTML='<div class="empty"><span class="spinner"></span></div>';
+  try{
+    const data=await fetchJSON(`/api/porfin/causaciones/${fecha}`);
+    if(data.error){wrap.innerHTML=`<div class="empty">${data.error}</div>`;return;}
+    document.getElementById('resumen-causaciones').innerHTML=`
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem;margin-bottom:1rem;">
+        <div style="background:var(--surface2);padding:.75rem 1rem;border-radius:8px;"><div style="color:var(--muted);font-size:.75rem;text-transform:uppercase;">Registros</div><div style="font-size:1.3rem;font-weight:700;">${data.total_registros}</div></div>
+        <div style="background:var(--surface2);padding:.75rem 1rem;border-radius:8px;"><div style="color:var(--muted);font-size:.75rem;text-transform:uppercase;">Suma Causación</div><div style="font-size:1.3rem;font-weight:700;">${fmtCOP(data.suma_causacion)}</div></div>
+        <div style="background:var(--surface2);padding:.75rem 1rem;border-radius:8px;"><div style="color:var(--muted);font-size:.75rem;text-transform:uppercase;">Alertas</div><div style="font-size:1.3rem;font-weight:700;color:${data.total_alertas>0?'var(--red)':'var(--green)'};">${data.total_alertas}</div></div>
+      </div>`;
+    const rows=data.alertas.length?data.alertas:data.detalle||[];
+    if(!rows.length){wrap.innerHTML='<div class="empty">Sin datos de causaciones</div>';return;}
+    const cols=Object.keys(rows[0]);
+    let html=`<table><thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>`;
+    rows.forEach(r=>{
+      html+=`<tr>${cols.map(c=>{const v=r[c];return`<td>${typeof v==='number'?fmt(v,4):v??'—'}</td>`;}).join('')}</tr>`;
+    });
+    html+='</tbody></table>';
+    wrap.innerHTML=html;
+  }catch(e){wrap.innerHTML=`<div class="empty">Error: ${e.message}</div>`;}
+}
+
+async function cargarVariaciones(){
+  const fechaFin=document.getElementById('sel-fecha').value;
+  const fechaIni=document.getElementById('sel-fecha-ant').value;
+  const umbral=document.getElementById('umbral').value;
+  const wrap=document.getElementById('wrap-var-porfin');
+  if(!fechaIni||!fechaFin||fechaIni===fechaFin){wrap.innerHTML='<div class="empty">Selecciona dos fechas distintas</div>';return;}
+  wrap.innerHTML='<div class="empty"><span class="spinner"></span></div>';
+  try{
+    const data=await fetchJSON(`/api/porfin/variaciones/${fechaIni}/${fechaFin}?umbral=${umbral}`);
+    if(!data.length){wrap.innerHTML='<div class="empty">Sin variaciones</div>';return;}
+    let html=`<table><thead><tr><th>ID</th><th>Val. Inicio</th><th>Val. Fin</th><th>VAR ABS</th><th>VAR %</th><th>Estado</th></tr></thead><tbody>`;
+    data.forEach(r=>{
+      html+=`<tr><td><strong>${r.ID}</strong></td><td>${fmtCOP(r.VAL_I)}</td><td>${fmtCOP(r.VAL_F)}</td>
+      <td>${fmtCOP(r.VAR_ABS)}</td><td>${fmtPct(r.VAR_PCT)}</td>
+      <td><span class="badge ${r.ANORMAL?'badge-red':'badge-green'}">${r.ANORMAL?'⚠ ANORMAL':'OK'}</span></td></tr>`;
+    });
+    html+='</tbody></table>';
+    wrap.innerHTML=html;
+  }catch(e){wrap.innerHTML=`<div class="empty">Error: ${e.message}</div>`;}
+}
+
+cargarFechas();
+</script>
+</body>
+</html>

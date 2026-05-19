@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Entornos virtuales
+venv/
+env/
+.env
+.venv
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Salidas generadas por la app
+MVALORACION/
+outputs/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editores
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Archivos temporales grandes (drivers, logs)
+chromedriver*
+geckodriver*
+*.log
+
+# Credenciales (nunca subir)
+*.key
+*.pem
+secrets.yaml
+config.local.yaml
