@@ -2,19 +2,22 @@
 # -*- coding: utf-8 -*-
 """
 ROUTER PORFIN (596 / 575)
-Revisión de precios cargados, valoración según circular 575/596,
-causaciones, errores y variaciones.
+Lee los archivos exportados desde Porfin:
+  - 596YYYYMMDD.CSV  → posiciones, valoraciones
+  - SKCLI575*.CSV    → causaciones
+Soporta: observaciones por fila, export Excel con openpyxl.
 """
 from __future__ import annotations
 
 import re
+import json
 import logging
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
 import pandas as pd
 import numpy as np
-from fastapi import APIRouter, Query, HTTPException, UploadFile, File
+from fastapi import APIRouter, Query, HTTPException
 from fastapi.responses import StreamingResponse
 import io
 import sys
@@ -24,480 +27,1023 @@ from config import get_data_dir
 logger = logging.getLogger("porfin")
 router = APIRouter()
 
-_ROOT    = Path(__file__).parent.parent.parent
-BASE_DIR = _ROOT / "data"
-RAW_DIR  = _ROOT / "data"
-
-# ── Constantes de valoración (Circular 575 / 596) ───────────────────────
-TIPOS_PRECIO_LIMPIO = {
-    "ACCION", "ADR", "ETF", "ACCION INTERNACIONAL", "ESTRATEGIA",
-}
-TIPOS_FIC = {"FIC", "FCP", "FONDO", "FICDE"}
-TIPOS_FM  = {"FM", "FONDO MUTUO", "FONDOCRENA"}
-
-UMBRAL_VAR_PCT = 5.0        # % variación anormal en precio
-UMBRAL_DIF_VALORACION = 1.0  # Diferencia mínima en valoración para alertar (COP)
+UMBRAL_VAR_PCT = 5.0
+UMBRAL_DIF_VAL = 1.0
 
 
-# ── Utilidades ──────────────────────────────────────────────────────────
-def _num(x) -> Optional[float]:
-    if pd.isna(x):
-        return None
+# ── Utilidades ──────────────────────────────────────────────────────────────
+
+def _base_dir() -> Path:
+    return get_data_dir()
+
+
+def _dirs(fecha: str = "") -> List[Path]:
+    base = _base_dir()
+    if fecha:
+        return [base / fecha, base]
+    return [base]
+
+
+def _find_596(fecha: str = "") -> Optional[Path]:
+    for d in _dirs(fecha):
+        if not d.exists():
+            continue
+        for f in sorted(d.iterdir()):
+            if not f.is_file():
+                continue
+            stem = f.stem.upper()
+            if re.match(r"^596\d{6,8}$", stem):
+                return f
+            if "596" in stem and f.suffix.upper() in (".CSV", ".TXT"):
+                return f
+    return None
+
+
+def _find_575(fecha: str = "") -> Optional[Path]:
+    for d in _dirs(fecha):
+        if not d.exists():
+            continue
+        for f in sorted(d.iterdir()):
+            if not f.is_file():
+                continue
+            stem = f.stem.upper()
+            if "575" in stem and f.suffix.upper() in (".CSV", ".TXT"):
+                return f
+            if re.match(r"^SKCLI", stem) and f.suffix.upper() in (".CSV", ".TXT"):
+                return f
+    return None
+
+
+def _read_porfin_csv(path: Path) -> pd.DataFrame:
     try:
-        return float(str(x).replace(",", ".").strip())
-    except Exception:
-        return None
+        df = pd.read_csv(path, sep=";", dtype=str, encoding="latin-1", on_bad_lines="skip")
+        df.columns = df.columns.str.strip()
+        df = df[~df.iloc[:, 0].str.match(r"^-+$", na=True)]
+        df = df[df.iloc[:, 0].notna() & df.iloc[:, 0].str.strip().ne("")]
+        first_col = df.columns[0]
+        df = df[df[first_col].str.strip() != first_col.strip()]
+        return df.reset_index(drop=True)
+    except Exception as e:
+        logger.error(f"Error leyendo {path}: {e}")
+        return pd.DataFrame()
 
 
-def _dirs_busqueda(fecha: str) -> List[Path]:
-    base = get_data_dir()
-    return [base / fecha, base]
+def _normalize_num_col(series: pd.Series) -> pd.Series:
+    s = series.astype(str).str.strip().str.replace(",", "", regex=False)
+    return pd.to_numeric(s, errors="coerce")
 
 
-def _buscar_archivo_596(fecha: str) -> Optional[Path]:
-    for d in _dirs_busqueda(fecha):
-        if not d.exists():
-            continue
-        for f in list(d.glob("*.CSV")) + list(d.glob("*.csv")):
-            if any(p.lower() in f.stem.lower() for p in ["596", "skcli"]):
-                return f
+def _col(df: pd.DataFrame, *candidates) -> Optional[str]:
+    for c in candidates:
+        if c in df.columns:
+            return c
+        for col in df.columns:
+            if col.strip().upper() == c.upper():
+                return col
+        for col in df.columns:
+            if c.upper() in col.upper():
+                return col
     return None
 
 
-def _buscar_archivo_575(fecha: str) -> Optional[Path]:
-    for d in _dirs_busqueda(fecha):
-        if not d.exists():
-            continue
-        for f in list(d.glob("*.CSV")) + list(d.glob("*.csv")):
-            if "575" in f.stem or "fun" in f.stem.lower():
-                return f
-    return None
+def _cargar_596(fecha: str = "") -> pd.DataFrame:
+    path = _find_596(fecha)
+    if not path:
+        return pd.DataFrame()
+    df = _read_porfin_csv(path)
+    if df.empty:
+        return df
+
+    renames = {
+        _col(df, "Especie"):          "ESPECIE",
+        _col(df, "Titulo"):           "TITULO",
+        _col(df, "ISIN"):             "ISIN",
+        _col(df, "Nemot", "Nemo"):    "NEMO",
+        _col(df, "Emision"):          "EMISION",
+        _col(df, "F.Vcto"):           "VCTO",
+        _col(df, "Valor Nominal"):    "NOMINAL",
+        _col(df, "Facial"):           "FACIAL",
+        _col(df, "Mod"):              "METODO",
+        _col(df, "F.Compra"):         "F_COMPRA",
+        _col(df, "Valor Compra"):     "VALOR_COMPRA",
+        _col(df, "Moned"):            "MONEDA",
+        _col(df, "Valor Mercado Or"): "VLR_MER_OR",
+        _col(df, "Valor Mercado"):    "VLR_MERCADO",
+        _col(df, "T.Mer"):            "TASA_MER",
+        _col(df, "Precio"):           "PRECIO",
+        _col(df, "Tasa"):             "TASA",
+        _col(df, "TIR"):              "TIR",
+        _col(df, "Dur", "Duration"):  "DURACION",
+        _col(df, "Llave"):            "LLAVE",
+        _col(df, "Por"):              "PORTAFOLIO",
+        _col(df, "PUC"):              "PUC",
+        _col(df, "Cla"):              "CLASE",
+        _col(df, "Fte"):              "FUENTE_TIT",
+    }
+    renames = {k: v for k, v in renames.items() if k and k != v}
+    df = df.rename(columns=renames)
+
+    for c in ["NOMINAL", "VALOR_COMPRA", "VLR_MERCADO", "VLR_MER_OR", "PRECIO", "TIR", "TASA_MER", "DURACION"]:
+        if c in df.columns:
+            df[c] = _normalize_num_col(df[c])
+
+    if "CLASE" in df.columns:
+        df = df[df["CLASE"].str.strip().isin(["Neg", "NoN"])]
+
+    df["ARCHIVO"] = path.name
+    df["_ROW_ID"] = df.index.astype(str)
+    return df.reset_index(drop=True)
 
 
-def _buscar_revision(fecha: str) -> Optional[Path]:
-    for d in _dirs_busqueda(fecha):
-        if not d.exists():
-            continue
-        for f in list(d.glob(f"*Revision*{fecha}*.xlsx")) + list(d.glob(f"*ISINES*{fecha}*.xlsx")) + list(d.glob("*Revision*.xlsx")) + list(d.glob("*ISINES*.xlsx")):
-            return f
-    return None
+def _cargar_575(fecha: str = "") -> pd.DataFrame:
+    path = _find_575(fecha)
+    if not path:
+        return pd.DataFrame()
+    df = _read_porfin_csv(path)
+    if df.empty:
+        return df
+
+    renames = {
+        _col(df, "Especie"):                     "ESPECIE",
+        _col(df, "Título", "Titulo"):            "TITULO",
+        _col(df, "Inver"):                        "INVER",
+        _col(df, "F.Vcto"):                       "VCTO",
+        _col(df, "Vlr Nominal", "Valor Nominal"): "NOMINAL",
+        _col(df, "Facial"):                       "FACIAL",
+        _col(df, "Mod"):                          "METODO",
+        _col(df, "Desde"):                        "DESDE",
+        _col(df, "Hasta"):                        "HASTA",
+        _col(df, "Vlr Mer. Ant"):                 "VLR_MER_ANT",
+        _col(df, "Vlr Mer. Hoy"):                 "VLR_MER_HOY",
+        _col(df, "Adeudados"):                    "ADEUDADOS",
+        _col(df, "Causación Mer", "Causacion Mer"): "CAUSACION_MER",
+        _col(df, "Causación TIR", "Causacion TIR"): "CAUSACION_TIR",
+        _col(df, "ISIN"):                         "ISIN",
+        _col(df, "Precio"):                       "PRECIO",
+        _col(df, "TIR.Mercado", "TIR"):           "TIR",
+        _col(df, "Moned"):                        "MONEDA",
+        _col(df, "Mnd Val An"):                   "MND_VAL_ANT",
+        _col(df, "Mnd Val"):                      "MND_VAL_HOY",
+        _col(df, "Dif.cambio"):                   "DIF_CAMBIO",
+        _col(df, "Causación Moneda", "Causacion Moneda"): "CAUSACION_MONEDA",
+        _col(df, "Causación Tasa", "Causacion Tasa"):     "CAUSACION_TASA",
+        _col(df, "Dias"):                         "DIAS",
+        _col(df, "Por"):                          "PORTAFOLIO",
+        _col(df, "Est"):                          "ESTADO",
+    }
+    renames = {k: v for k, v in renames.items() if k and k != v}
+    df = df.rename(columns=renames)
+
+    for c in ["NOMINAL", "VLR_MER_ANT", "VLR_MER_HOY", "CAUSACION_MER", "CAUSACION_TIR",
+              "PRECIO", "TIR", "DIF_CAMBIO", "CAUSACION_MONEDA", "CAUSACION_TASA"]:
+        if c in df.columns:
+            df[c] = _normalize_num_col(df[c])
+
+    if "ESPECIE" in df.columns:
+        df = df[~df["ESPECIE"].str.strip().str.match(r"^-+$", na=True)]
+        df = df[df["ESPECIE"].str.strip().ne("")]
+
+    df["ARCHIVO"] = path.name
+    df["_ROW_ID"] = df.index.astype(str)
+    return df.reset_index(drop=True)
 
 
-def _leer_csv_robusto(path: Path) -> pd.DataFrame:
-    for sep in [",", ";", "|", "\t"]:
+def _fechas_disponibles() -> List[str]:
+    base = _base_dir()
+    fechas = set()
+    patron = re.compile(r"(\d{8})")
+    if not base.exists():
+        return []
+    for f in base.rglob("*"):
+        if f.is_file():
+            m = patron.search(f.name)
+            if m:
+                fechas.add(m.group(1))
+    for d in base.iterdir():
+        if d.is_dir() and re.match(r"^\d{8}$", d.name):
+            fechas.add(d.name)
+    return sorted(fechas)
+
+
+# ── Observaciones ────────────────────────────────────────────────────────────
+
+def _obs_file(fecha: str, modulo: str) -> Path:
+    return _base_dir() / fecha / f"obs_{modulo}_{fecha}.json"
+
+
+def _load_obs(fecha: str, modulo: str) -> Dict[str, str]:
+    f = _obs_file(fecha, modulo)
+    if f.exists():
         try:
-            df = pd.read_csv(path, sep=sep, dtype=str, encoding="latin-1", on_bad_lines="skip")
-            if len(df.columns) > 2:
-                df.columns = df.columns.str.strip().str.upper()
-                return df
+            return json.loads(f.read_text(encoding="utf-8"))
         except Exception:
-            continue
-    return pd.DataFrame()
+            return {}
+    return {}
 
 
-def _cargar_precios_sp(fecha: str) -> Dict[str, float]:
-    """Devuelve {isin: precio} desde SP (fuente Infovalmer)."""
-    precios = {}
-    for d in [BASE_DIR, RAW_DIR]:
-        p = d / f"SP_{fecha}.xlsx"
-        if p.exists():
-            df = pd.read_excel(p, dtype=str, engine="openpyxl")
-            df.columns = df.columns.str.strip().str.upper()
-            for col_id in ["ISIN", "NEMO", "CODIGO ISIN"]:
-                if col_id in df.columns:
-                    for col_p in ["PRECIO_VALOR_CALCULADO", "ULTIMO_PRECIO", "PRECIO"]:
-                        if col_p in df.columns:
-                            for _, row in df.iterrows():
-                                v = _num(row.get(col_p))
-                                k = str(row.get(col_id, "")).strip().upper()
-                                if k and v is not None:
-                                    precios[k] = v
-                            break
-                    break
-    return precios
+def _save_obs(fecha: str, modulo: str, obs: Dict[str, str]) -> None:
+    f = _obs_file(fecha, modulo)
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(json.dumps(obs, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def _cargar_precios_tp(fecha: str) -> Dict[str, float]:
-    precios = {}
-    for d in [BASE_DIR, RAW_DIR]:
-        p = d / f"TP_{fecha}.xlsx"
-        if not p.exists():
-            p = d / f"titulos_participativos_valoracion{fecha}.txt"
-        if p.exists():
-            if p.suffix == ".xlsx":
-                df = pd.read_excel(p, dtype=str, engine="openpyxl")
-                df.columns = df.columns.str.strip().str.upper()
-                col_id = next((c for c in ["ISIN", "CODIGO", "ID"] if c in df.columns), None)
-                col_p  = next((c for c in ["PRECIO", "VALOR"] if c in df.columns), None)
-                if col_id and col_p:
-                    for _, row in df.iterrows():
-                        v = _num(row.get(col_p))
-                        k = str(row.get(col_id, "")).strip().upper()
-                        if k and v is not None:
-                            precios[k] = v
-            else:
-                with open(p, "r", encoding="latin-1", errors="ignore") as f:
-                    for ln in f:
-                        if len(ln) >= 29:
-                            isin  = ln[7:19].strip().upper()
-                            precio = _num(ln[19:29])
-                            if isin and precio is not None:
-                                precios[isin] = precio
-    return precios
+# ── Endpoints ────────────────────────────────────────────────────────────────
 
-
-def _valorar_titulo(row: pd.Series, precio_t: Optional[float], moneda_t: float = 1.0) -> Optional[float]:
-    """Valoración según tipo de activo (Circular 575/596)."""
-    if precio_t is None:
-        return None
-    tipo = str(row.get("TIPO_PRODUCTO", row.get("TIPO", ""))).strip().upper()
-    nominal = _num(row.get("NOMINAL", row.get("VLR_MER_OR", row.get("VALOR_NOMINAL", 0))))
-    if nominal is None or nominal == 0:
-        return None
-
-    tipo_upper = tipo.upper()
-    if any(t in tipo_upper for t in TIPOS_FM):
-        return nominal * moneda_t * precio_t
-    if any(t in tipo_upper for t in TIPOS_FIC):
-        return nominal * precio_t
-    if any(t in tipo_upper for t in TIPOS_PRECIO_LIMPIO):
-        return nominal * moneda_t * precio_t
-    # Renta fija por defecto → precio / 100
-    return nominal * moneda_t * (precio_t / 100.0)
-
-
-# ── Endpoints ───────────────────────────────────────────────────────────
 @router.get("/fechas")
 def get_fechas():
-    patron = re.compile(r"(\d{8})")
-    fechas = set()
-    for d in [RAW_DIR, BASE_DIR]:
-        for ext in ["*.xlsx", "*.csv", "*.CSV"]:
-            for f in d.glob(ext):
-                m = patron.search(f.stem)
-                if m:
-                    fechas.add(m.group(1))
-    return {"fechas": sorted(fechas)}
+    return {"fechas": _fechas_disponibles()}
 
 
 @router.get("/resumen/{fecha}")
 def resumen_porfin(fecha: str):
-    """
-    Resumen general de la carga 596 para una fecha:
-    - Total posiciones
-    - Posiciones con/sin precio
-    - Distribución por tipo
-    - Alertas de valoración
-    """
-    path_596 = _buscar_archivo_596(fecha)
-    if not path_596:
-        # Buscar revisión pre-generada
-        path_rev = _buscar_revision(fecha)
-        if path_rev:
-            df = pd.read_excel(path_rev, dtype=str, engine="openpyxl")
-            df.columns = df.columns.str.strip().str.upper()
-        else:
-            return {"error": f"No se encontró archivo 596 ni revisión para {fecha}",
-                    "fecha": fecha, "total": 0}
-    else:
-        df = _leer_csv_robusto(path_596)
-
+    df = _cargar_596(fecha)
     if df.empty:
-        return {"error": "Archivo vacío", "fecha": fecha}
-
-    # Normalizar columnas clave
-    for alias, canonical in [
-        ("TIPO DE PRODUCTO", "TIPO"), ("TIPO_PRODUCTO", "TIPO"),
-        ("VLR MER. HOY", "VALORACION_HOY"), ("VLR. MER. HOY", "VALORACION_HOY"),
-        ("VLR MER. ANT", "VALORACION_ANT"), ("VLR. MER. ANT", "VALORACION_ANT"),
-        ("VALOR NOMINAL", "NOMINAL"), ("VLR NOMINAL", "NOMINAL"),
-    ]:
-        if alias in df.columns and canonical not in df.columns:
-            df = df.rename(columns={alias: canonical})
+        return {"error": f"No se encontró 596 para {fecha}", "fecha": fecha, "total": 0}
 
     total = len(df)
-
-    # Tipos
     tipo_dist = {}
-    if "TIPO" in df.columns:
-        tipo_dist = df["TIPO"].fillna("SIN TIPO").value_counts().to_dict()
+    if "ESPECIE" in df.columns:
+        df["_TIPO"] = df["ESPECIE"].str.strip().str.split().str[:2].str.join(" ")
+        tipo_dist = df["_TIPO"].value_counts().head(20).to_dict()
 
-    # Valoración
-    val_hoy = pd.to_numeric(df.get("VALORACION_HOY", pd.Series()), errors="coerce")
-    val_ant = pd.to_numeric(df.get("VALORACION_ANT", pd.Series()), errors="coerce")
+    port_dist = df["PORTAFOLIO"].str.strip().value_counts().head(20).to_dict() if "PORTAFOLIO" in df.columns else {}
+    mon_dist  = df["MONEDA"].str.strip().value_counts().to_dict() if "MONEDA" in df.columns else {}
 
-    variaciones = []
-    if not val_hoy.empty and not val_ant.empty:
-        diff = (val_hoy - val_ant).abs()
-        pct  = ((val_hoy - val_ant) / val_ant.abs().replace(0, np.nan) * 100)
-        alertas = df[pct.abs() > UMBRAL_VAR_PCT].copy()
-        alertas["VAR_PCT"] = pct[alertas.index].round(4)
-        alertas["VAR_ABS"] = diff[alertas.index].round(2)
-        variaciones = alertas.replace({float("nan"): None}).head(100).to_dict(orient="records")
+    val_total = None
+    if "VLR_MERCADO" in df.columns:
+        val_total = round(float(df["VLR_MERCADO"].dropna().sum()), 2)
+
+    df_575 = _cargar_575(fecha)
+    caus_mer = round(float(df_575["CAUSACION_MER"].dropna().sum()), 2) if not df_575.empty and "CAUSACION_MER" in df_575.columns else None
+    sin_precio = int(df["PRECIO"].isna().sum()) if "PRECIO" in df.columns else 0
 
     return {
         "fecha": fecha,
+        "archivo_596": df["ARCHIVO"].iloc[0] if "ARCHIVO" in df.columns else "",
+        "archivo_575": df_575["ARCHIVO"].iloc[0] if not df_575.empty and "ARCHIVO" in df_575.columns else "",
         "total_posiciones": total,
-        "distribucion_tipo": tipo_dist,
-        "suma_valoracion_hoy": round(float(val_hoy.sum()), 2) if not val_hoy.empty else None,
-        "suma_valoracion_ant": round(float(val_ant.sum()), 2) if not val_ant.empty else None,
-        "alertas_variacion": variaciones[:20],
-        "total_alertas": len(variaciones),
+        "distribucion_especie": tipo_dist,
+        "distribucion_portafolio": port_dist,
+        "distribucion_moneda": mon_dist,
+        "valor_mercado_total": val_total,
+        "causacion_mercado_total": caus_mer,
+        "sin_precio": sin_precio,
+        "total_alertas": sin_precio,
     }
 
 
 @router.get("/posiciones/{fecha}")
 def posiciones_porfin(
     fecha: str,
-    tipo: Optional[str] = Query(None, description="Filtro por tipo de activo"),
-    busqueda: Optional[str] = Query(None, description="Buscar por ISIN/NEMO"),
-    solo_alertas: bool = Query(False, description="Sólo posiciones con alerta"),
+    busqueda: Optional[str] = Query(None),
+    moneda: Optional[str] = Query(None),
+    portafolio: Optional[str] = Query(None),
+    solo_alertas: bool = Query(False),
+    limit: int = Query(2000),
 ):
-    """Lista completa de posiciones del 596 con precios y valoraciones."""
-    path = _buscar_archivo_596(fecha)
-    path_rev = _buscar_revision(fecha)
-
-    if path_rev:
-        df = pd.read_excel(path_rev, dtype=str, engine="openpyxl")
-        df.columns = df.columns.str.strip().str.upper()
-        df["FUENTE_ARCHIVO"] = "REVISION"
-    elif path:
-        df = _leer_csv_robusto(path)
-        df["FUENTE_ARCHIVO"] = "596"
-    else:
+    df = _cargar_596(fecha)
+    if df.empty:
         return []
 
-    # Normalizar aliases
-    rename_map = {
-        "TIPO DE PRODUCTO": "TIPO", "TIPO_PRODUCTO": "TIPO",
-        "VLR MER. HOY": "VALORACION_HOY", "VLR. MER. HOY": "VALORACION_HOY",
-        "VLR MER. ANT": "VALORACION_ANT", "VLR. MER. ANT": "VALORACION_ANT",
-        "VALOR NOMINAL": "NOMINAL", "VLR NOMINAL": "NOMINAL",
-        "NEMOTÉCNICO BOL": "NEMO", "NEMOTECNICO BOL": "NEMO",
-    }
-    df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
+    obs_map = _load_obs(fecha, "porfin596")
 
-    # Cargar precios de Infovalmer
-    precios_sp = _cargar_precios_sp(fecha)
-    precios_tp = _cargar_precios_tp(fecha)
+    if "PRECIO" in df.columns:
+        df["ALERTA"] = df["PRECIO"].isna()
+    else:
+        df["ALERTA"] = False
 
-    # Asignar precio
-    def _get_precio(row):
-        isin = str(row.get("ISIN", "")).strip().upper()
-        nemo = str(row.get("NEMO", "")).strip().upper()
-        return precios_sp.get(isin) or precios_sp.get(nemo) or precios_tp.get(isin) or precios_tp.get(nemo)
-
-    df["PRECIO_INFOVALMER"] = df.apply(_get_precio, axis=1)
-
-    # Valoración calculada
-    df["VALORACION_CALCULADA"] = df.apply(lambda r: _valorar_titulo(r, r["PRECIO_INFOVALMER"]), axis=1)
-    df["VALORACION_HOY_NUM"] = pd.to_numeric(df.get("VALORACION_HOY", pd.Series(dtype=str)), errors="coerce")
-    df["DIF_VALORACION"] = (df["VALORACION_CALCULADA"] - df["VALORACION_HOY_NUM"]).round(2)
-
-    # Observaciones
-    def _obs(row):
-        obs = []
-        if pd.isna(row.get("PRECIO_INFOVALMER")):
-            obs.append("SIN PRECIO INFOVALMER")
-        dif = row.get("DIF_VALORACION")
-        if dif is not None and not pd.isna(dif) and abs(dif) > UMBRAL_DIF_VALORACION:
-            obs.append(f"DIF VALORACION: {dif:,.2f}")
-        return " | ".join(obs) if obs else "OK"
-
-    df["OBSERVACION"] = df.apply(_obs, axis=1)
-
-    # Filtros
-    if tipo:
-        if "TIPO" in df.columns:
-            df = df[df["TIPO"].astype(str).str.upper().str.contains(tipo.upper(), na=False)]
     if busqueda:
         mask = pd.Series(False, index=df.index)
-        for c in ["ISIN", "NEMO", "TITULO"]:
+        for c in ["ISIN", "NEMO", "ESPECIE", "LLAVE", "TITULO"]:
             if c in df.columns:
                 mask = mask | df[c].astype(str).str.upper().str.contains(busqueda.upper(), na=False)
         df = df[mask]
+    if moneda and "MONEDA" in df.columns:
+        df = df[df["MONEDA"].str.upper().str.contains(moneda.upper(), na=False)]
+    if portafolio and "PORTAFOLIO" in df.columns:
+        df = df[df["PORTAFOLIO"].str.upper().str.contains(portafolio.upper(), na=False)]
     if solo_alertas:
-        df = df[df["OBSERVACION"] != "OK"]
+        df = df[df["ALERTA"]]
 
-    cols_salida = [c for c in [
-        "ISIN", "NEMO", "TIPO", "NOMINAL", "VALORACION_HOY", "VALORACION_ANT",
-        "PRECIO_INFOVALMER", "VALORACION_CALCULADA", "DIF_VALORACION", "OBSERVACION",
-        "FUENTE_ARCHIVO"
+    cols = [c for c in [
+        "_ROW_ID", "CLASE", "FUENTE_TIT", "ESPECIE", "TITULO", "ISIN", "NEMO",
+        "EMISION", "VCTO", "NOMINAL", "MONEDA", "VLR_MERCADO", "VLR_MER_OR",
+        "PRECIO", "TIR", "TASA_MER", "DURACION", "PORTAFOLIO", "LLAVE", "PUC", "ALERTA"
     ] if c in df.columns]
 
-    return df[cols_salida].replace({float("nan"): None}).head(1000).to_dict(orient="records")
+    records = df[cols].replace({float("nan"): None, True: True, False: False}).head(limit).to_dict(orient="records")
+    for r in records:
+        r["OBS"] = obs_map.get(str(r.get("_ROW_ID", "")), "")
+    return records
 
 
 @router.get("/causaciones/{fecha}")
-def causaciones_porfin(fecha: str, fecha_ant: Optional[str] = Query(None)):
-    """
-    Revisa causaciones del 575: DI vs DF, signos, diferencias con Porfin.
-    """
-    path_575 = _buscar_archivo_575(fecha)
-    if not path_575:
-        return {"error": f"No se encontró archivo 575 para {fecha}"}
-
-    df = _leer_csv_robusto(path_575)
+def causaciones_porfin(fecha: str, limit: int = Query(1000)):
+    df = _cargar_575(fecha)
     if df.empty:
-        return {"error": "Archivo 575 vacío"}
+        return {"error": f"No se encontró 575 para {fecha}", "fecha": fecha}
 
-    # Aliases
-    rename_map = {
-        "VLR NOMINAL": "NOMINAL", "VALOR NOMINAL": "NOMINAL",
-        "VLR MER. ANT": "VALORACION_ANT", "VLR MER. HOY": "VALORACION_HOY",
-        "CAUSACIÓN MER": "CAUSACION", "CAUSACION MER": "CAUSACION",
-    }
-    df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
+    obs_map = _load_obs(fecha, "porfin575")
 
-    for c in ["VALORACION_HOY", "VALORACION_ANT", "CAUSACION", "NOMINAL"]:
-        if c in df.columns:
-            df[c] = pd.to_numeric(df[c].astype(str).str.replace(",", "."), errors="coerce")
+    caus_mer_total = round(float(df["CAUSACION_MER"].dropna().sum()), 2) if "CAUSACION_MER" in df.columns else None
+    caus_tir_total = round(float(df["CAUSACION_TIR"].dropna().sum()), 2) if "CAUSACION_TIR" in df.columns else None
 
-    if "VALORACION_HOY" in df.columns and "VALORACION_ANT" in df.columns:
-        df["CAUSACION_CALCULADA"] = (df["VALORACION_HOY"] - df["VALORACION_ANT"]).round(2)
-        if "CAUSACION" in df.columns:
-            df["DIF_CAUSACION"] = (df["CAUSACION"] - df["CAUSACION_CALCULADA"]).round(2)
-            df["ALERTA_CAUSACION"] = df["DIF_CAUSACION"].abs() > UMBRAL_DIF_VALORACION
+    if "CAUSACION_MER" in df.columns and "CAUSACION_TIR" in df.columns:
+        df["DIF_MER_TIR"] = (df["CAUSACION_MER"] - df["CAUSACION_TIR"]).round(2)
 
-    alertas = df[df.get("ALERTA_CAUSACION", pd.Series(False, index=df.index))] if "ALERTA_CAUSACION" in df.columns else pd.DataFrame()
+    vlr_hoy = round(float(df["VLR_MER_HOY"].dropna().sum()), 2) if "VLR_MER_HOY" in df.columns else None
+    vlr_ant = round(float(df["VLR_MER_ANT"].dropna().sum()), 2) if "VLR_MER_ANT" in df.columns else None
+
+    detalle = df.replace({float("nan"): None}).head(limit).to_dict(orient="records")
+    for r in detalle:
+        r["OBS"] = obs_map.get(str(r.get("_ROW_ID", "")), "")
 
     return {
         "fecha": fecha,
+        "archivo": df["ARCHIVO"].iloc[0] if "ARCHIVO" in df.columns else "",
         "total_registros": len(df),
-        "total_alertas": len(alertas),
-        "suma_causacion": round(float(df["CAUSACION"].sum()), 2) if "CAUSACION" in df.columns else None,
-        "suma_causacion_calculada": round(float(df["CAUSACION_CALCULADA"].sum()), 2) if "CAUSACION_CALCULADA" in df.columns else None,
-        "alertas": alertas.replace({float("nan"): None}).head(100).to_dict(orient="records"),
-        "detalle": df.replace({float("nan"): None}).head(500).to_dict(orient="records"),
+        "causacion_mercado_total": caus_mer_total,
+        "causacion_tir_total": caus_tir_total,
+        "diferencia_mer_tir": round(caus_mer_total - caus_tir_total, 2) if caus_mer_total and caus_tir_total else None,
+        "vlr_mercado_hoy": vlr_hoy,
+        "vlr_mercado_ant": vlr_ant,
+        "delta_valoracion": round(vlr_hoy - vlr_ant, 2) if vlr_hoy and vlr_ant else None,
+        "detalle": detalle,
     }
+
+
+@router.get("/errores/{fecha}")
+def errores_porfin(fecha: str):
+    df = _cargar_596(fecha)
+    if df.empty:
+        return {"error": f"No se encontró 596 para {fecha}", "total_errores": 0}
+
+    errores: List[Dict] = []
+
+    if "PRECIO" in df.columns:
+        for _, r in df[df["PRECIO"].isna()].iterrows():
+            errores.append({
+                "tipo": "SIN PRECIO", "severidad": "ALTO",
+                "isin": str(r.get("ISIN", "")).strip(),
+                "especie": str(r.get("ESPECIE", "")).strip(),
+                "portafolio": str(r.get("PORTAFOLIO", "")).strip(),
+                "detalle": "Posición sin precio de valoración",
+            })
+
+    if "VLR_MERCADO" in df.columns:
+        for _, r in df[df["VLR_MERCADO"] < 0].iterrows():
+            errores.append({
+                "tipo": "VALORACION NEGATIVA", "severidad": "ALTO",
+                "isin": str(r.get("ISIN", "")).strip(),
+                "especie": str(r.get("ESPECIE", "")).strip(),
+                "portafolio": str(r.get("PORTAFOLIO", "")).strip(),
+                "detalle": f"Vlr Mercado: {r.get('VLR_MERCADO', 0):,.2f}",
+            })
+
+    if "NOMINAL" in df.columns:
+        for _, r in df[df["NOMINAL"].isna() | (df["NOMINAL"] == 0)].head(30).iterrows():
+            errores.append({
+                "tipo": "NOMINAL CERO", "severidad": "BAJO",
+                "isin": str(r.get("ISIN", "")).strip(),
+                "especie": str(r.get("ESPECIE", "")).strip(),
+                "portafolio": str(r.get("PORTAFOLIO", "")).strip(),
+                "detalle": "Nominal cero o nulo",
+            })
+
+    return {
+        "fecha": fecha,
+        "total_errores": len(errores),
+        "resumen_severidad": {
+            "ALTO":  sum(1 for e in errores if e["severidad"] == "ALTO"),
+            "MEDIO": sum(1 for e in errores if e["severidad"] == "MEDIO"),
+            "BAJO":  sum(1 for e in errores if e["severidad"] == "BAJO"),
+        },
+        "resumen_tipo": {t: sum(1 for e in errores if e["tipo"] == t) for t in set(e["tipo"] for e in errores)},
+        "errores": errores[:500],
+    }
+
+
+@router.get("/portafolios/{fecha}")
+def portafolios(fecha: str):
+    df = _cargar_596(fecha)
+    if df.empty or "PORTAFOLIO" not in df.columns:
+        return []
+    grp = df.groupby("PORTAFOLIO").agg(
+        posiciones=("ISIN", "count"),
+        valor_mercado=("VLR_MERCADO", "sum"),
+    ).reset_index()
+    grp["valor_mercado"] = grp["valor_mercado"].round(2)
+    return grp.replace({float("nan"): None}).to_dict(orient="records")
+
+
+@router.get("/monedas/{fecha}")
+def monedas_596(fecha: str):
+    df = _cargar_596(fecha)
+    if df.empty or "MONEDA" not in df.columns:
+        return []
+    grp = df.groupby("MONEDA").agg(
+        posiciones=("ISIN", "count"),
+        valor_mercado=("VLR_MERCADO", "sum"),
+    ).reset_index()
+    grp["valor_mercado"] = grp["valor_mercado"].round(2)
+    return grp.sort_values("valor_mercado", ascending=False).replace({float("nan"): None}).to_dict(orient="records")
 
 
 @router.get("/variaciones/{fecha_inicio}/{fecha_fin}")
 def variaciones_porfin(fecha_inicio: str, fecha_fin: str, umbral: float = Query(5.0)):
-    """Variaciones de valoración entre dos fechas en 596."""
-    def _cargar(fecha):
-        p = _buscar_archivo_596(fecha) or _buscar_revision(fecha)
-        if not p:
-            return pd.DataFrame()
-        if p.suffix == ".xlsx":
-            df = pd.read_excel(p, dtype=str, engine="openpyxl")
-        else:
-            df = _leer_csv_robusto(p)
-        df.columns = df.columns.str.strip().str.upper()
-        for alias, canon in [
-            ("VLR MER. HOY", "VALORACION_HOY"), ("VLR. MER. HOY", "VALORACION_HOY"),
-            ("NEMOTÉCNICO BOL", "NEMO"), ("NEMOTECNICO BOL", "NEMO"),
-            ("TIPO DE PRODUCTO", "TIPO"),
-        ]:
-            if alias in df.columns and canon not in df.columns:
-                df = df.rename(columns={alias: canon})
-        return df
-
-    df_i = _cargar(fecha_inicio)
-    df_f = _cargar(fecha_fin)
+    df_i = _cargar_596(fecha_inicio)
+    df_f = _cargar_596(fecha_fin)
     if df_i.empty or df_f.empty:
         return []
-
-    col_id = next((c for c in ["ISIN", "NEMO"] if c in df_i.columns and c in df_f.columns), None)
-    if not col_id:
+    col_id = next((c for c in ["ISIN", "LLAVE", "TITULO"] if c in df_i.columns and c in df_f.columns), None)
+    if not col_id or "VLR_MERCADO" not in df_i.columns:
         return []
-
-    df_i[col_id] = df_i[col_id].astype(str).str.strip().str.upper()
-    df_f[col_id] = df_f[col_id].astype(str).str.strip().str.upper()
-    df_i["VAL_I"] = pd.to_numeric(df_i.get("VALORACION_HOY", pd.Series()), errors="coerce")
-    df_f["VAL_F"] = pd.to_numeric(df_f.get("VALORACION_HOY", pd.Series()), errors="coerce")
-
-    merged = df_i[[col_id, "VAL_I"]].merge(df_f[[col_id, "VAL_F"]], on=col_id, how="inner")
+    df_i[col_id] = df_i[col_id].astype(str).str.strip()
+    df_f[col_id] = df_f[col_id].astype(str).str.strip()
+    merged = (
+        df_i[[col_id, "VLR_MERCADO", "ESPECIE"]].rename(columns={"VLR_MERCADO": "VAL_I"})
+        .merge(df_f[[col_id, "VLR_MERCADO"]].rename(columns={"VLR_MERCADO": "VAL_F"}), on=col_id)
+    )
     merged = merged.dropna(subset=["VAL_I", "VAL_F"])
     merged = merged[merged["VAL_I"] != 0]
     merged["VAR_ABS"] = (merged["VAL_F"] - merged["VAL_I"]).round(2)
     merged["VAR_PCT"] = ((merged["VAR_ABS"] / merged["VAL_I"].abs()) * 100).round(4)
     merged["ANORMAL"] = merged["VAR_PCT"].abs() > umbral
-    merged = merged.rename(columns={col_id: "ID"})
     return merged.replace({float("nan"): None}).sort_values("VAR_PCT", key=abs, ascending=False).to_dict(orient="records")
 
 
-@router.get("/errores/{fecha}")
-def errores_porfin(fecha: str):
-    """
-    Detección automática de errores: precios faltantes, tipos no reconocidos,
-    nominales en cero, valoraciones negativas.
-    """
-    path = _buscar_archivo_596(fecha) or _buscar_revision(fecha)
-    if not path:
-        return {"error": f"No se encontró archivo para {fecha}"}
+# ── Observaciones ────────────────────────────────────────────────────────────
 
-    if path.suffix == ".xlsx":
-        df = pd.read_excel(path, dtype=str, engine="openpyxl")
+from pydantic import BaseModel as PydanticBase
+from typing import Dict as TDict
+
+class ObsPayload(PydanticBase):
+    fila: str
+    obs: str
+    modulo: str = "porfin596"
+
+
+@router.post("/observaciones/{fecha}")
+def guardar_obs(fecha: str, body: ObsPayload):
+    obs_map = _load_obs(fecha, body.modulo)
+    if body.obs.strip():
+        obs_map[body.fila] = body.obs.strip()
     else:
-        df = _leer_csv_robusto(path)
-    df.columns = df.columns.str.strip().str.upper()
+        obs_map.pop(body.fila, None)
+    _save_obs(fecha, body.modulo, obs_map)
+    return {"ok": True, "total_obs": len(obs_map)}
 
-    for alias, canon in [
-        ("TIPO DE PRODUCTO", "TIPO"), ("VLR MER. HOY", "VALORACION_HOY"),
-        ("VALOR NOMINAL", "NOMINAL"), ("NEMOTÉCNICO BOL", "NEMO"),
-    ]:
-        if alias in df.columns and canon not in df.columns:
-            df = df.rename(columns={alias: canon})
 
-    errores: List[Dict] = []
+@router.get("/observaciones/{fecha}")
+def get_obs(fecha: str, modulo: str = Query("porfin596")):
+    return _load_obs(fecha, modulo)
 
-    # Sin precio Infovalmer
-    precios_sp = _cargar_precios_sp(fecha)
-    precios_tp = _cargar_precios_tp(fecha)
-    precios_todos = {**precios_sp, **precios_tp}
 
-    if "ISIN" in df.columns:
-        sin_precio = df[~df["ISIN"].astype(str).str.upper().isin(precios_todos.keys())]
-        for _, row in sin_precio.iterrows():
-            isin = str(row.get("ISIN", "")).strip()
-            if isin and isin.upper() != "NAN":
-                errores.append({
-                    "tipo_error": "SIN PRECIO",
-                    "isin": isin,
-                    "nemo": row.get("NEMO", ""),
-                    "tipo_activo": row.get("TIPO", ""),
-                    "detalle": "No se encontró precio en SP ni TP",
-                    "severidad": "ALTO",
-                })
+# ── Export Excel ─────────────────────────────────────────────────────────────
 
-    # Valoración negativa
-    if "VALORACION_HOY" in df.columns:
-        val = pd.to_numeric(df["VALORACION_HOY"].astype(str).str.replace(",", "."), errors="coerce")
-        neg = df[val < 0]
-        for _, row in neg.iterrows():
-            errores.append({
-                "tipo_error": "VALORACION NEGATIVA",
-                "isin": row.get("ISIN", ""),
-                "nemo": row.get("NEMO", ""),
-                "tipo_activo": row.get("TIPO", ""),
-                "detalle": f"Valoración: {row.get('VALORACION_HOY', '')}",
-                "severidad": "ALTO",
-            })
+@router.get("/excel/{fecha}")
+def export_excel(fecha: str):
+    """
+    Genera un Excel de revisión diaria con:
+    - Hoja 596: posiciones con observaciones, alertas resaltadas
+    - Hoja 575: causaciones con alertas
+    - Hoja Resumen: KPIs del día
+    """
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import (
+            PatternFill, Font, Alignment, Border, Side,
+            numbers as xl_numbers
+        )
+        from openpyxl.utils import get_column_letter
+        from openpyxl.utils.dataframe import dataframe_to_rows
+    except ImportError:
+        raise HTTPException(500, "openpyxl no está instalado. Ejecuta: pip install openpyxl")
 
-    # Nominal cero o nulo
-    if "NOMINAL" in df.columns:
-        nom = pd.to_numeric(df["NOMINAL"].astype(str).str.replace(",", "."), errors="coerce")
-        sin_nom = df[nom.isna() | (nom == 0)]
-        for _, row in sin_nom.head(50).iterrows():
-            errores.append({
-                "tipo_error": "NOMINAL CERO/NULO",
-                "isin": row.get("ISIN", ""),
-                "nemo": row.get("NEMO", ""),
-                "tipo_activo": row.get("TIPO", ""),
-                "detalle": "Nominal igual a cero o nulo",
-                "severidad": "MEDIO",
-            })
+    df596 = _cargar_596(fecha)
+    df575 = _cargar_575(fecha)
+    obs596 = _load_obs(fecha, "porfin596")
+    obs575 = _load_obs(fecha, "porfin575")
 
-    resumen_severidad = {
-        "ALTO": len([e for e in errores if e["severidad"] == "ALTO"]),
-        "MEDIO": len([e for e in errores if e["severidad"] == "MEDIO"]),
-        "BAJO": len([e for e in errores if e["severidad"] == "BAJO"]),
-    }
+    wb = Workbook()
+
+    # ── Estilos ──
+    AZUL_HEADER  = PatternFill("solid", fgColor="1F3864")
+    ROJO_ALERTA  = PatternFill("solid", fgColor="C00000")
+    AMARILLO_OBS = PatternFill("solid", fgColor="FFD700")
+    GRIS_ALT     = PatternFill("solid", fgColor="F2F2F2")
+    VERDE        = PatternFill("solid", fgColor="E2EFDA")
+
+    font_header = Font(name="Calibri", bold=True, color="FFFFFF", size=10)
+    font_alerta = Font(name="Calibri", bold=True, color="FFFFFF", size=9)
+    font_normal = Font(name="Calibri", size=9)
+    font_titulo = Font(name="Calibri", bold=True, size=13, color="1F3864")
+
+    alin_centro  = Alignment(horizontal="center", vertical="center", wrap_text=False)
+    alin_izq     = Alignment(horizontal="left",   vertical="center", wrap_text=True)
+    alin_der     = Alignment(horizontal="right",  vertical="center")
+
+    thin = Side(style="thin", color="CCCCCC")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+    def _header_row(ws, cols, row_n=1):
+        for j, col_name in enumerate(cols, 1):
+            cell = ws.cell(row=row_n, column=j, value=col_name)
+            cell.fill = AZUL_HEADER
+            cell.font = font_header
+            cell.alignment = alin_centro
+            cell.border = border
+
+    def _auto_width(ws, max_w=40):
+        for col in ws.columns:
+            max_len = 0
+            col_letter = get_column_letter(col[0].column)
+            for cell in col:
+                if cell.value:
+                    max_len = max(max_len, len(str(cell.value)))
+            ws.column_dimensions[col_letter].width = min(max_len + 2, max_w)
+
+    def _fmt_num(v):
+        if v is None or (isinstance(v, float) and np.isnan(v)):
+            return None
+        try:
+            return float(v)
+        except Exception:
+            return v
+
+    # ── Hoja Resumen ────
+    ws_res = wb.active
+    ws_res.title = "Resumen"
+
+    ws_res.merge_cells("A1:F1")
+    c = ws_res["A1"]
+    c.value = f"REVISIÓN DIARIA PORFIN — {fecha[:4]}-{fecha[4:6]}-{fecha[6:]}"
+    c.font = font_titulo
+    c.alignment = Alignment(horizontal="center", vertical="center")
+    ws_res.row_dimensions[1].height = 28
+
+    kpis = [
+        ("Posiciones 596", len(df596) if not df596.empty else 0),
+        ("Sin Precio", int(df596["PRECIO"].isna().sum()) if not df596.empty and "PRECIO" in df596.columns else 0),
+        ("Valor Mercado Total", _fmt_num(df596["VLR_MERCADO"].sum()) if not df596.empty and "VLR_MERCADO" in df596.columns else None),
+        ("Causación Mercado (575)", _fmt_num(df575["CAUSACION_MER"].sum()) if not df575.empty and "CAUSACION_MER" in df575.columns else None),
+        ("Registros 575", len(df575) if not df575.empty else 0),
+        ("Observaciones 596", len(obs596)),
+        ("Observaciones 575", len(obs575)),
+        ("Archivo 596", df596["ARCHIVO"].iloc[0] if not df596.empty and "ARCHIVO" in df596.columns else "—"),
+        ("Archivo 575", df575["ARCHIVO"].iloc[0] if not df575.empty and "ARCHIVO" in df575.columns else "—"),
+    ]
+    for i, (k, v) in enumerate(kpis, 3):
+        ws_res.cell(row=i, column=1, value=k).font = Font(bold=True, size=10)
+        ws_res.cell(row=i, column=1).fill = GRIS_ALT if i % 2 else PatternFill()
+        cell_v = ws_res.cell(row=i, column=2, value=v)
+        cell_v.font = font_normal
+        if isinstance(v, float) and abs(v) > 1_000:
+            cell_v.number_format = '#,##0.00'
+    ws_res.column_dimensions["A"].width = 30
+    ws_res.column_dimensions["B"].width = 28
+
+    # ── Hoja 596 ────
+    ws596 = wb.create_sheet("Posiciones 596")
+    if not df596.empty:
+        cols596 = [c for c in [
+            "CLASE", "ESPECIE", "TITULO", "ISIN", "NEMO", "EMISION", "VCTO",
+            "NOMINAL", "MONEDA", "VLR_MERCADO", "VLR_MER_OR",
+            "PRECIO", "TIR", "TASA_MER", "DURACION",
+            "PORTAFOLIO", "LLAVE", "PUC", "ALERTA", "_ROW_ID"
+        ] if c in df596.columns]
+
+        # Agregar alertas
+        if "PRECIO" in df596.columns:
+            df596["ALERTA"] = df596["PRECIO"].isna()
+
+        display_cols = [c for c in cols596 if c != "_ROW_ID"] + ["OBS"]
+        _header_row(ws596, display_cols, 1)
+        ws596.row_dimensions[1].height = 18
+        ws596.freeze_panes = "A2"
+
+        for i, (_, row) in enumerate(df596[cols596].iterrows(), 2):
+            row_id = str(row.get("_ROW_ID", i - 2))
+            obs_text = obs596.get(row_id, "")
+            is_alerta = bool(row.get("ALERTA", False))
+            is_obs = bool(obs_text)
+
+            for j, col in enumerate(display_cols, 1):
+                if col == "OBS":
+                    val = obs_text
+                else:
+                    val = _fmt_num(row.get(col))
+
+                cell = ws596.cell(row=i, column=j, value=val)
+                cell.font = font_alerta if is_alerta else font_normal
+                cell.border = border
+
+                if is_alerta and col not in ("OBS",):
+                    cell.fill = ROJO_ALERTA
+                elif is_obs:
+                    cell.fill = AMARILLO_OBS
+                elif i % 2 == 0:
+                    cell.fill = GRIS_ALT
+
+                if col in ("VLR_MERCADO", "VLR_MER_OR", "NOMINAL", "VALOR_COMPRA"):
+                    cell.number_format = '#,##0.00'
+                    cell.alignment = alin_der
+                elif col in ("PRECIO", "TIR", "TASA_MER", "DURACION"):
+                    cell.number_format = '0.000000'
+                    cell.alignment = alin_der
+                else:
+                    cell.alignment = alin_izq
+
+        _auto_width(ws596)
+
+    # ── Hoja 575 ────
+    ws575 = wb.create_sheet("Causaciones 575")
+    if not df575.empty:
+        cols575 = [c for c in [
+            "ESPECIE", "TITULO", "ISIN", "VCTO", "NOMINAL",
+            "VLR_MER_ANT", "VLR_MER_HOY", "CAUSACION_MER", "CAUSACION_TIR",
+            "DIF_MER_TIR", "PRECIO", "TIR", "MONEDA", "PORTAFOLIO", "_ROW_ID"
+        ] if c in df575.columns]
+
+        if "CAUSACION_MER" in df575.columns and "CAUSACION_TIR" in df575.columns:
+            df575["DIF_MER_TIR"] = (df575["CAUSACION_MER"] - df575["CAUSACION_TIR"]).round(2)
+
+        display_cols575 = [c for c in cols575 if c != "_ROW_ID"] + ["OBS"]
+        _header_row(ws575, display_cols575, 1)
+        ws575.row_dimensions[1].height = 18
+        ws575.freeze_panes = "A2"
+
+        for i, (_, row) in enumerate(df575[cols575].iterrows(), 2):
+            row_id = str(row.get("_ROW_ID", i - 2))
+            obs_text = obs575.get(row_id, "")
+            dif = row.get("DIF_MER_TIR")
+            is_alerta = dif is not None and not (isinstance(dif, float) and np.isnan(dif)) and abs(float(dif)) > UMBRAL_DIF_VAL
+
+            for j, col in enumerate(display_cols575, 1):
+                val = obs_text if col == "OBS" else _fmt_num(row.get(col))
+                cell = ws575.cell(row=i, column=j, value=val)
+                cell.font = font_alerta if is_alerta else font_normal
+                cell.border = border
+
+                if is_alerta:
+                    cell.fill = ROJO_ALERTA
+                elif obs_text:
+                    cell.fill = AMARILLO_OBS
+                elif i % 2 == 0:
+                    cell.fill = GRIS_ALT
+
+                if col in ("VLR_MER_ANT", "VLR_MER_HOY", "CAUSACION_MER", "CAUSACION_TIR", "DIF_MER_TIR", "NOMINAL"):
+                    cell.number_format = '#,##0.00'
+                    cell.alignment = alin_der
+                else:
+                    cell.alignment = alin_izq
+
+        _auto_width(ws575)
+
+    # ── Generar ────
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    fname = f"Revision_Porfin_{fecha}.xlsx"
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={fname}"},
+    )
+
+
+# ── Moneda normalizada ───────────────────────────────────────────────────────
+
+def _norm_moneda(m: str) -> str:
+    m = str(m).strip()
+    if m.startswith("US"):  return "USD"
+    if m in ("$", "COP"):   return "COP"
+    if m.startswith("UU") or m.startswith("UVR"): return "UVR"
+    if m.startswith("EU"):  return "EUR"
+    if m.startswith("UK"):  return "GBP"
+    if m.startswith("BRL"): return "BRL"
+    if m.startswith("MXN"): return "MXN"
+    if m.startswith("YEN"): return "JPY"
+    if m.startswith("E") or m.startswith("EI") or m.startswith("EF"): return "FIC"
+    return m
+
+
+# ── Fondos (575) ──────────────────────────────────────────────────────────────
+
+def _get_fondos_df(df575: pd.DataFrame) -> pd.DataFrame:
+    """Agrega 575 por fondo (parte antes del guión en PORTAFOLIO)."""
+    df = df575.copy()
+    df["FONDO"] = df["PORTAFOLIO"].str.strip().str.split("-").str[0].str.strip()
+    df["TIPO_PORT"] = df["PORTAFOLIO"].str.strip().str.split("-").str[1].str.strip().str[:1]
+    df["MON_NORM"] = df["MONEDA"].apply(_norm_moneda)
+
+    grp = df.groupby("FONDO").agg(
+        portafolios=("PORTAFOLIO", "nunique"),
+        posiciones=("ISIN", "count"),
+        vlr_hoy=("VLR_MER_HOY", "sum"),
+        vlr_ant=("VLR_MER_ANT", "sum"),
+        caus_mer=("CAUSACION_MER", "sum"),
+        caus_tir=("CAUSACION_TIR", "sum"),
+    ).reset_index()
+    grp["delta_valor"] = grp["vlr_hoy"] - grp["vlr_ant"]
+    grp["dif_caus"] = grp["caus_mer"] - grp["caus_tir"]
+    for c in ["vlr_hoy", "vlr_ant", "caus_mer", "caus_tir", "delta_valor", "dif_caus"]:
+        grp[c] = grp[c].round(2)
+    return grp.sort_values("vlr_hoy", ascending=False)
+
+
+@router.get("/fondos/{fecha}")
+def fondos_575(fecha: str):
+    """Dashboard de fondos: agrupación por fondo, totales, causaciones, delta."""
+    df = _cargar_575(fecha)
+    if df.empty:
+        return {"error": f"No se encontró 575 para {fecha}", "fondos": []}
+
+    grp = _get_fondos_df(df)
+
+    # Monedas por fondo
+    df["FONDO"] = df["PORTAFOLIO"].str.strip().str.split("-").str[0].str.strip()
+    df["MON_NORM"] = df["MONEDA"].apply(_norm_moneda)
+    monedas_por_fondo: Dict[str, Dict] = {}
+    for fondo, sub in df.groupby("FONDO"):
+        mon_grp = sub.groupby("MON_NORM").agg(
+            posiciones=("ISIN", "count"),
+            vlr_hoy=("VLR_MER_HOY", "sum"),
+            caus_mer=("CAUSACION_MER", "sum"),
+        ).reset_index()
+        monedas_por_fondo[fondo] = mon_grp.round(2).to_dict(orient="records")
+
+    # Totales globales
+    total_vlr = float(df["VLR_MER_HOY"].sum())
+    total_caus = float(df["CAUSACION_MER"].sum())
 
     return {
         "fecha": fecha,
-        "total_errores": len(errores),
-        "resumen_severidad": resumen_severidad,
-        "errores": errores[:200],
+        "total_vlr_mercado": round(total_vlr, 2),
+        "total_causacion_mer": round(total_caus, 2),
+        "total_fondos": len(grp),
+        "fondos": grp.replace({float("nan"): None}).to_dict(orient="records"),
+        "monedas_por_fondo": monedas_por_fondo,
     }
+
+
+@router.get("/fondos/{fecha}/{fondo}")
+def fondo_detalle(
+    fecha: str,
+    fondo: str,
+    moneda: Optional[str] = Query(None),
+    solo_alertas: bool = Query(False),
+):
+    """Detalle de posiciones de un fondo específico (575)."""
+    df = _cargar_575(fecha)
+    if df.empty:
+        return []
+    obs_map = _load_obs(fecha, "porfin575")
+
+    df["FONDO"] = df["PORTAFOLIO"].str.strip().str.split("-").str[0].str.strip()
+    df["MON_NORM"] = df["MONEDA"].apply(_norm_moneda)
+    df = df[df["FONDO"].str.upper() == fondo.upper()]
+
+    if moneda:
+        df = df[df["MON_NORM"].str.upper() == moneda.upper()]
+
+    if "CAUSACION_MER" in df.columns and "CAUSACION_TIR" in df.columns:
+        df["DIF_MER_TIR"] = (df["CAUSACION_MER"] - df["CAUSACION_TIR"]).round(2)
+        df["ALERTA_CAUS"] = df["DIF_MER_TIR"].abs() > UMBRAL_DIF_VAL
+
+    if solo_alertas and "ALERTA_CAUS" in df.columns:
+        df = df[df["ALERTA_CAUS"]]
+
+    cols = [c for c in [
+        "_ROW_ID", "PORTAFOLIO", "ESPECIE", "TITULO", "ISIN", "VCTO",
+        "NOMINAL", "MON_NORM", "MONEDA",
+        "VLR_MER_ANT", "VLR_MER_HOY", "CAUSACION_MER", "CAUSACION_TIR",
+        "DIF_MER_TIR", "ALERTA_CAUS", "PRECIO", "TIR", "METODO", "ESTADO"
+    ] if c in df.columns]
+
+    records = df[cols].replace({float("nan"): None, True: True, False: False}).to_dict(orient="records")
+    for r in records:
+        r["OBS"] = obs_map.get(str(r.get("_ROW_ID", "")), "")
+    return records
+
+
+@router.get("/monedas_fondos/{fecha}")
+def monedas_fondos(fecha: str):
+    """Distribución por moneda normalizada en 575."""
+    df = _cargar_575(fecha)
+    if df.empty:
+        return []
+    df["MON_NORM"] = df["MONEDA"].apply(_norm_moneda)
+    grp = df.groupby("MON_NORM").agg(
+        posiciones=("ISIN", "count"),
+        vlr_hoy=("VLR_MER_HOY", "sum"),
+        vlr_ant=("VLR_MER_ANT", "sum"),
+        caus_mer=("CAUSACION_MER", "sum"),
+        caus_tir=("CAUSACION_TIR", "sum"),
+    ).reset_index()
+    grp["delta"] = grp["vlr_hoy"] - grp["vlr_ant"]
+    for c in ["vlr_hoy", "vlr_ant", "caus_mer", "caus_tir", "delta"]:
+        grp[c] = grp[c].round(2)
+    return grp.sort_values("vlr_hoy", ascending=False).replace({float("nan"): None}).to_dict(orient="records")
+
+
+# ── Alertas TIR / DV (596) ────────────────────────────────────────────────────
+
+_MET_COL_596 = "Mét"   # columna 'Mét' en 596 — método de curva: TC, QSI, MC*
+
+def _met_col_596(df: pd.DataFrame) -> Optional[str]:
+    """Encuentra la columna 'Mét' (método de curva) en el 596."""
+    for c in df.columns:
+        # buscar la col que contiene TC, QSI, MC
+        if df[c].astype(str).str.strip().isin(["TC", "QSI", "MC3-I", "MC4-E", "MC1-I", "PS"]).any():
+            return c
+    return None
+
+
+def _fecha_siguiente(fecha: str) -> str:
+    """Retorna fecha + 1 día en formato YYYYMMDD."""
+    try:
+        from datetime import datetime, timedelta
+        d = datetime.strptime(fecha, "%Y%m%d") + timedelta(days=1)
+        return d.strftime("%Y%m%d")
+    except Exception:
+        return ""
+
+
+@router.get("/alertas_tir/{fecha}")
+def alertas_tir_596(fecha: str, fecha_emision_hoy: Optional[str] = Query(None)):
+    """
+    Detecta posiciones en el 596 que están valorando a TIR/curva:
+    - FUENTE_TIT = 1DV → al vencimiento explícito (siempre alerta)
+    - Mét = TC (Tasa Cupón = precio a TIR implícita) — TES/CDTs sin precio de mercado
+    - METODO DV pero VCTO != mañana ni hoy → título al vencimiento fuera de plazo normal
+    Excluye DV con VCTO == fecha o fecha+1 (normal: vencen hoy/mañana).
+    """
+    df = _cargar_596(fecha)
+    if df.empty:
+        return {"error": f"No se encontró 596 para {fecha}", "alertas": []}
+
+    fecha_emision = fecha_emision_hoy or fecha
+    fecha_sig = _fecha_siguiente(fecha)
+    alertas: List[Dict] = []
+    met_c = _met_col_596(df)
+
+    for _, r in df.iterrows():
+        motivos = []
+        metodo = str(r.get("METODO", "")).strip()
+        fuente = str(r.get("FUENTE_TIT", "")).strip()
+        emision = str(r.get("EMISION", "")).strip()
+        vcto = str(r.get("VCTO", "")).strip()
+
+        # Excluir emitidos hoy (normal que usen TIR el primer día)
+        if emision == fecha_emision:
+            continue
+
+        # 1DV = fuente al vencimiento (siempre es alerta si no vence inminente)
+        if fuente == "1DV":
+            motivos.append("FUENTE 1DV (al vencimiento)")
+
+        # DV = método al vencimiento — solo alerta si NO vence hoy ni mañana
+        if metodo == "DV" and vcto not in (fecha, fecha_sig, ""):
+            motivos.append(f"METODO DV (vcto {vcto})")
+
+        # Mét = TC (Tasa Cupón = valoración a TIR implícita sin precio de mercado)
+        if met_c and str(r.get(met_c, "")).strip() == "TC":
+            motivos.append("Mét TC (Tasa Cupón/TIR)")
+
+        if motivos:
+            alertas.append({
+                "motivo":    " | ".join(motivos),
+                "isin":      str(r.get("ISIN", "")).strip(),
+                "especie":   str(r.get("ESPECIE", "")).strip(),
+                "titulo":    str(r.get("TITULO", "")).strip(),
+                "emision":   emision,
+                "vcto":      vcto,
+                "metodo":    metodo,
+                "fuente_tit": fuente,
+                "met_curva": str(r.get(met_c, "")).strip() if met_c else "",
+                "precio":    None if pd.isna(r.get("PRECIO")) else r.get("PRECIO"),
+                "tir":       None if pd.isna(r.get("TIR")) else r.get("TIR"),
+                "portafolio": str(r.get("PORTAFOLIO", "")).strip(),
+                "llave":     str(r.get("LLAVE", "")).strip(),
+                "nominal":   None if pd.isna(r.get("NOMINAL")) else r.get("NOMINAL"),
+                "vlr_mercado": None if pd.isna(r.get("VLR_MERCADO")) else r.get("VLR_MERCADO"),
+            })
+
+    resumen: Dict[str, int] = {}
+    for a in alertas:
+        for parte in a["motivo"].split(" | "):
+            # Normalizar la clave (quitar el vcto variable del DV)
+            key = parte if "METODO DV" not in parte else "METODO DV (al vencimiento)"
+            resumen[key] = resumen.get(key, 0) + 1
+
+    return {
+        "fecha": fecha,
+        "total_alertas": len(alertas),
+        "resumen_motivo": resumen,
+        "alertas": alertas,
+    }
+
+
+@router.get("/alertas_tir_575/{fecha}")
+def alertas_tir_575(fecha: str):
+    """
+    Detecta en el 575 posiciones valorando a TIR cuando no corresponde.
+    Usa columna Mét (QES-SI = curva, MC* = matriz, TC sería alerta).
+    """
+    df = _cargar_575(fecha)
+    if df.empty:
+        return {"error": f"No se encontró 575 para {fecha}", "alertas": []}
+
+    alertas: List[Dict] = []
+
+    # Buscar col Mét en 575
+    met_c = None
+    for c in df.columns:
+        if df[c].astype(str).str.strip().isin(["QES-SI", "MC3-I", "MC4-E", "MC1-I", "QSI"]).any():
+            met_c = c
+            break
+
+    for _, r in df.iterrows():
+        motivos = []
+        metodo = str(r.get("METODO", "")).strip()
+
+        if metodo == "DV":
+            motivos.append("METODO DV")
+
+        # Si en 575 hay una columna Mét con TC
+        if met_c and str(r.get(met_c, "")).strip() in ("TC", "TC   "):
+            motivos.append("Mét TC (Tasa Cupón)")
+
+        if motivos:
+            alertas.append({
+                "motivo":     " | ".join(motivos),
+                "isin":       str(r.get("ISIN", "")).strip(),
+                "especie":    str(r.get("ESPECIE", "")).strip(),
+                "titulo":     str(r.get("TITULO", "")).strip(),
+                "metodo":     metodo,
+                "met_curva":  str(r.get(met_c, "")).strip() if met_c else "",
+                "precio":     r.get("PRECIO"),
+                "tir":        r.get("TIR"),
+                "vlr_mer_hoy": r.get("VLR_MER_HOY"),
+                "causacion_mer": r.get("CAUSACION_MER"),
+                "portafolio": str(r.get("PORTAFOLIO", "")).strip(),
+            })
+
+    return {
+        "fecha": fecha,
+        "total_alertas": len(alertas),
+        "alertas": alertas,
+    }
+
+
+# ── Config de columnas para alerta TIR ────────────────────────────────────────
+# Permite al usuario ver qué columna y qué valor indica TIR en cada archivo
+
+@router.get("/config_columnas/{fecha}")
+def config_columnas(fecha: str):
+    """
+    Devuelve el mapa de columnas relevantes detectadas en 596 y 575
+    para la configuración de alertas TIR/DV.
+    """
+    df596 = _cargar_596(fecha)
+    df575 = _cargar_575(fecha)
+
+    met_c_596 = _met_col_596(df596) if not df596.empty else None
+    met_c_575 = None
+    if not df575.empty:
+        for c in df575.columns:
+            if df575[c].astype(str).str.strip().isin(["QES-SI", "MC3-I", "MC4-E", "QSI"]).any():
+                met_c_575 = c
+                break
+
+    return {
+        "596": {
+            "col_metodo":   "METODO",
+            "col_fuente":   "FUENTE_TIT",
+            "col_met_curva": met_c_596,
+            "metodo_dv_valor": "DV",
+            "fuente_dv_valor": "1DV",
+            "met_curva_tc_valor": "TC",
+            "metodo_valores_unicos": sorted(df596["METODO"].dropna().unique().tolist()) if not df596.empty and "METODO" in df596.columns else [],
+            "fuente_valores_unicos": sorted(df596["FUENTE_TIT"].dropna().unique().tolist()) if not df596.empty and "FUENTE_TIT" in df596.columns else [],
+            "met_curva_valores_unicos": sorted(df596[met_c_596].dropna().str.strip().unique().tolist()) if met_c_596 and not df596.empty else [],
+        },
+        "575": {
+            "col_metodo":   "METODO",
+            "col_met_curva": met_c_575,
+            "metodo_dv_valor": "DV",
+            "metodo_valores_unicos": sorted(df575["METODO"].dropna().unique().tolist()) if not df575.empty and "METODO" in df575.columns else [],
+            "met_curva_valores_unicos": sorted(df575[met_c_575].dropna().str.strip().unique().tolist()) if met_c_575 and not df575.empty else [],
+        },
+    }
+
+
+# ── Referencia para mitra.py (compatibilidad) ─────────────────────────────────
+def _buscar_archivo_575(fecha: str) -> Optional[Path]:
+    return _find_575(fecha)
+
+
+def _leer_csv_robusto(path: Path) -> pd.DataFrame:
+    return _read_porfin_csv(path)

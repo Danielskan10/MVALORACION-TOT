@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Configuración centralizada de MVALORACION.
-Lee/escribe config.yaml en la raíz del proyecto.
-Los routers importan get_data_dir() para resolver la carpeta de datos.
-"""
 from __future__ import annotations
 
 import logging
@@ -23,6 +18,12 @@ _DEFAULTS: Dict[str, Any] = {
     "umbral_variacion_pct": 5.0,
     "umbral_dif_causacion": 1.0,
     "port": 8000,
+    # Archivos de referencia
+    "ref_especies":    str(_ROOT / "data" / "Especies.csv"),
+    "ref_fcpe":        str(_ROOT / "data" / "FCPE.xlsx"),
+    "ref_fiduciaria":  str(_ROOT / "data" / "FIDUCIARIA0210.xlsx"),
+    "ref_fondos":      str(_ROOT / "data" / "FONDOS.xlsx"),
+    "ref_fcp":         str(_ROOT / "data" / "FCP.xlsx"),
 }
 
 

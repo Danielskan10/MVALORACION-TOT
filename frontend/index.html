@@ -2,398 +2,585 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>MVALORACION — Control Operativo</title>
 <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
 <style>
-  :root {
-    --bg: #0d1117; --surface: #161b22; --surface2: #21262d;
-    --border: #30363d; --text: #e6edf3; --muted: #8b949e;
-    --green: #3fb950; --blue: #58a6ff; --orange: #f0883e;
-    --red: #f85149; --purple: #bc8cff; --yellow: #e3b341;
-    --accent: #1f6feb;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+:root{
+  --bg:#080c10;--surface:#0d1117;--surface2:#161b22;--surface3:#21262d;
+  --border:#21262d;--border2:#30363d;--text:#e6edf3;--muted:#6e7681;--muted2:#8b949e;
+  --green:#2ea043;--green2:#3fb950;--blue:#1f6feb;--blue2:#58a6ff;
+  --orange:#d18616;--orange2:#f0883e;--red:#b91c1c;--red2:#f85149;
+  --purple:#6e40c9;--purple2:#bc8cff;--yellow:#9e6a03;--yellow2:#e3b341;
+  --accent:#1f6feb;--accent-hover:#388bfd;
+  --radius:8px;--radius-lg:12px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;}
+::-webkit-scrollbar{width:6px;height:6px;}
+::-webkit-scrollbar-track{background:var(--surface);}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
 
-  /* TOP NAV */
-  nav {
-    background: var(--surface); border-bottom: 1px solid var(--border);
-    padding: 0 2rem; display: flex; align-items: center; gap: 2rem;
-    height: 56px; position: sticky; top: 0; z-index: 100;
-  }
-  .nav-logo { font-weight: 700; font-size: 1.1rem; color: var(--blue); letter-spacing: .05em; }
-  .nav-logo span { color: var(--green); }
-  .nav-links { display: flex; gap: .25rem; }
-  .nav-links a {
-    color: var(--muted); text-decoration: none; padding: .4rem .9rem;
-    border-radius: 6px; font-size: .875rem; font-weight: 500; transition: all .15s;
-  }
-  .nav-links a:hover, .nav-links a.active { background: var(--surface2); color: var(--text); }
-  .nav-links a.active { border-bottom: 2px solid var(--blue); border-radius: 6px 6px 0 0; }
+/* NAV */
+nav{
+  background:var(--surface);border-bottom:1px solid var(--border2);
+  padding:0 1.5rem;display:flex;align-items:center;gap:1rem;
+  height:52px;position:sticky;top:0;z-index:200;
+  backdrop-filter:blur(12px);
+}
+.nav-brand{font-weight:800;font-size:.95rem;color:var(--text);letter-spacing:.06em;
+  display:flex;align-items:center;gap:.5rem;text-decoration:none;white-space:nowrap;}
+.nav-brand .dot{width:8px;height:8px;border-radius:50%;background:var(--blue2);}
+.nav-sep{width:1px;height:20px;background:var(--border2);}
+.nav-links{display:flex;gap:.15rem;flex:1;}
+.nav-links a{
+  color:var(--muted2);text-decoration:none;padding:.35rem .75rem;
+  border-radius:var(--radius);font-size:.8rem;font-weight:500;
+  transition:all .15s;display:flex;align-items:center;gap:.35rem;
+}
+.nav-links a:hover{background:var(--surface2);color:var(--text);}
+.nav-links a.active{background:var(--surface3);color:var(--text);}
+.nav-links a .icon{font-size:.9rem;}
+.nav-end{display:flex;align-items:center;gap:.5rem;margin-left:auto;}
 
-  /* HERO */
-  .hero {
-    padding: 4rem 2rem 2rem;
-    background: radial-gradient(ellipse at 60% 0%, #1f6feb22 0%, transparent 60%);
-    text-align: center;
-  }
-  .hero h1 { font-size: 2.4rem; font-weight: 700; margin-bottom: .75rem; }
-  .hero h1 span { color: var(--blue); }
-  .hero p { color: var(--muted); font-size: 1.05rem; max-width: 600px; margin: 0 auto; }
+/* BTNS */
+.btn{
+  background:var(--accent);color:#fff;border:none;padding:.4rem 1rem;
+  border-radius:var(--radius);font-size:.8rem;font-weight:600;cursor:pointer;
+  font-family:inherit;transition:all .15s;white-space:nowrap;
+  display:inline-flex;align-items:center;gap:.35rem;
+}
+.btn:hover{background:var(--accent-hover);}
+.btn-ghost{background:transparent;color:var(--muted2);border:1px solid var(--border2);}
+.btn-ghost:hover{background:var(--surface2);color:var(--text);border-color:var(--border2);}
+.btn-icon{
+  background:transparent;border:1px solid var(--border2);color:var(--muted2);
+  width:32px;height:32px;border-radius:var(--radius);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;font-size:.9rem;
+  transition:all .15s;
+}
+.btn-icon:hover{border-color:var(--blue2);color:var(--text);}
 
-  /* DATE SELECTOR */
-  .date-bar {
-    display: flex; align-items: center; justify-content: center; gap: 1rem;
-    padding: 1.5rem 2rem; background: var(--surface);
-    border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
-  }
-  .date-bar label { color: var(--muted); font-size: .875rem; }
-  .date-bar select, .date-bar input {
-    background: var(--surface2); border: 1px solid var(--border); color: var(--text);
-    padding: .45rem .9rem; border-radius: 6px; font-size: .875rem; font-family: inherit;
-    cursor: pointer;
-  }
-  .date-bar select:focus, .date-bar input:focus { outline: none; border-color: var(--blue); }
-  .btn {
-    background: var(--accent); color: #fff; border: none; padding: .45rem 1.2rem;
-    border-radius: 6px; font-size: .875rem; font-weight: 500; cursor: pointer;
-    font-family: inherit; transition: opacity .15s;
-  }
-  .btn:hover { opacity: .85; }
-  .btn-ghost { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+/* HERO */
+.hero{
+  padding:3.5rem 2rem 2rem;
+  background:radial-gradient(ellipse 80% 60% at 50% -20%,#1f6feb18 0%,transparent 70%);
+  border-bottom:1px solid var(--border2);
+}
+.hero-inner{max-width:1100px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:2rem;flex-wrap:wrap;}
+.hero h1{font-size:2rem;font-weight:800;line-height:1.2;margin-bottom:.5rem;}
+.hero h1 span{
+  background:linear-gradient(90deg,var(--blue2),var(--purple2));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+}
+.hero p{color:var(--muted2);font-size:.9rem;max-width:520px;line-height:1.6;}
+.hero-badge{
+  display:inline-flex;align-items:center;gap:.4rem;padding:.3rem .8rem;
+  background:var(--surface2);border:1px solid var(--border2);border-radius:20px;
+  font-size:.72rem;font-weight:600;color:var(--muted2);margin-bottom:1rem;
+}
+.hero-badge .dot{width:6px;height:6px;border-radius:50%;background:var(--green2);
+  box-shadow:0 0 6px var(--green2);}
 
-  /* CARDS MÓDULOS */
-  .modules { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; padding: 2rem; max-width: 1200px; margin: 0 auto; }
-  .module-card {
-    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
-    padding: 1.75rem; transition: all .2s; cursor: pointer; text-decoration: none; color: var(--text);
-    display: block;
-  }
-  .module-card:hover { border-color: var(--blue); transform: translateY(-2px); box-shadow: 0 8px 24px #0004; }
-  .module-icon { font-size: 2rem; margin-bottom: 1rem; }
-  .module-card h2 { font-size: 1.15rem; font-weight: 600; margin-bottom: .5rem; }
-  .module-card p { color: var(--muted); font-size: .875rem; line-height: 1.5; }
-  .module-badge {
-    display: inline-block; margin-top: 1rem; padding: .2rem .6rem;
-    border-radius: 20px; font-size: .75rem; font-weight: 600;
-  }
-  .badge-blue { background: #1f6feb33; color: var(--blue); }
-  .badge-green { background: #3fb95033; color: var(--green); }
-  .badge-orange { background: #f0883e33; color: var(--orange); }
+/* DATE BAR */
+.date-bar{
+  background:var(--surface);border-bottom:1px solid var(--border2);
+  padding:.75rem 2rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap;
+}
+.date-bar label{color:var(--muted);font-size:.75rem;font-weight:500;text-transform:uppercase;letter-spacing:.06em;}
+.date-bar select{
+  background:var(--surface2);border:1px solid var(--border2);color:var(--text);
+  padding:.35rem .75rem;border-radius:var(--radius);font-size:.8rem;font-family:inherit;cursor:pointer;
+}
+.date-bar select:focus{outline:none;border-color:var(--blue2);}
 
-  /* KPI STRIP */
-  .kpi-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; padding: 0 2rem 2rem; max-width: 1200px; margin: 0 auto; }
-  .kpi {
-    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
-    padding: 1.25rem 1.5rem;
-  }
-  .kpi-label { color: var(--muted); font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; margin-bottom: .4rem; }
-  .kpi-value { font-size: 1.6rem; font-weight: 700; }
-  .kpi-sub { color: var(--muted); font-size: .8rem; margin-top: .25rem; }
-  .kpi-value.ok { color: var(--green); }
-  .kpi-value.warn { color: var(--yellow); }
-  .kpi-value.err { color: var(--red); }
+/* STATUS BAR */
+.status-bar{
+  padding:.6rem 2rem;background:var(--bg);border-bottom:1px solid var(--border);
+  display:flex;gap:1.5rem;align-items:center;flex-wrap:wrap;max-width:none;
+}
+.status-item{display:flex;align-items:center;gap:.4rem;font-size:.75rem;color:var(--muted2);}
+.status-item strong{color:var(--text);}
+.pulse{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--green2);}
+.pulse.warn{background:var(--yellow2);}
+.pulse.err{background:var(--red2);}
 
-  /* ACTIVIDAD */
-  .section { padding: 0 2rem 2rem; max-width: 1200px; margin: 0 auto; }
-  .section-title { font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
-  .activity-list { display: flex; flex-direction: column; gap: .5rem; }
-  .activity-item {
-    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
-    padding: .85rem 1.25rem; display: flex; align-items: center; gap: 1rem; font-size: .875rem;
-  }
-  .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-  .dot-green { background: var(--green); }
-  .dot-yellow { background: var(--yellow); }
-  .dot-red { background: var(--red); }
-  .activity-item .ts { color: var(--muted); font-size: .8rem; margin-left: auto; white-space: nowrap; }
+/* KPI STRIP */
+.kpi-strip{
+  display:grid;grid-template-columns:repeat(4,1fr);gap:.75rem;
+  padding:1.25rem 2rem;max-width:1200px;margin:0 auto;
+}
+.kpi{
+  background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);
+  padding:1.1rem 1.25rem;position:relative;overflow:hidden;
+  transition:border-color .2s;
+}
+.kpi:hover{border-color:var(--border2);}
+.kpi::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:var(--kpi-accent,var(--blue2));opacity:.6;
+}
+.kpi-label{color:var(--muted);font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.5rem;font-weight:500;}
+.kpi-value{font-size:1.5rem;font-weight:700;line-height:1;color:var(--kpi-color,var(--text));}
+.kpi-sub{color:var(--muted);font-size:.72rem;margin-top:.4rem;}
+.kpi.ok{--kpi-accent:var(--green2);--kpi-color:var(--green2);}
+.kpi.warn{--kpi-accent:var(--yellow2);--kpi-color:var(--yellow2);}
+.kpi.err{--kpi-accent:var(--red2);--kpi-color:var(--red2);}
+.kpi.blue{--kpi-accent:var(--blue2);--kpi-color:var(--blue2);}
+.kpi.purple{--kpi-accent:var(--purple2);--kpi-color:var(--purple2);}
 
-  /* SPINNER */
-  .spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid var(--border); border-top-color: var(--blue); border-radius: 50%; animation: spin .6s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
+/* MODULES GRID */
+.modules-section{padding:1.5rem 2rem;max-width:1200px;margin:0 auto;}
+.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;}
+.section-title{font-size:.72rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;}
+.modules{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;}
+.module-card{
+  background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);
+  padding:1.5rem;transition:all .2s;cursor:pointer;text-decoration:none;color:var(--text);
+  display:block;position:relative;overflow:hidden;
+}
+.module-card::after{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(135deg,var(--mc-color,var(--blue))08,transparent 60%);
+  opacity:0;transition:opacity .2s;
+}
+.module-card:hover{border-color:var(--mc-color,var(--blue2));transform:translateY(-2px);}
+.module-card:hover::after{opacity:1;}
+.module-card.porfin{--mc-color:var(--green2);}
+.module-card.mitra{--mc-color:var(--blue2);}
+.module-card.insumos{--mc-color:var(--orange2);}
+.mc-icon{
+  width:40px;height:40px;border-radius:10px;display:flex;align-items:center;
+  justify-content:center;font-size:1.2rem;margin-bottom:1rem;
+  background:var(--surface2);border:1px solid var(--border2);
+}
+.module-card h2{font-size:.95rem;font-weight:700;margin-bottom:.4rem;}
+.module-card p{color:var(--muted2);font-size:.78rem;line-height:1.55;}
+.mc-tags{display:flex;flex-wrap:wrap;gap:.35rem;margin-top:1rem;}
+.mc-tag{
+  padding:.15rem .5rem;border-radius:20px;font-size:.68rem;font-weight:600;
+  background:var(--surface2);border:1px solid var(--border2);color:var(--muted2);
+}
+.mc-footer{
+  margin-top:1.25rem;padding-top:.75rem;border-top:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+  font-size:.75rem;color:var(--muted);
+}
+.mc-arrow{color:var(--muted);transition:transform .2s,color .2s;}
+.module-card:hover .mc-arrow{transform:translateX(4px);color:var(--text);}
 
-  /* FOOTER */
-  footer { text-align: center; color: var(--muted); font-size: .8rem; padding: 2rem; border-top: 1px solid var(--border); margin-top: 2rem; }
+/* ACTIVITY */
+.activity-section{padding:0 2rem 2rem;max-width:1200px;margin:0 auto;}
+.activity-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;}
+.activity-card{background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:1.25rem;}
+.activity-card-title{font-size:.75rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:1rem;}
+.file-row{
+  display:flex;align-items:center;gap:.75rem;padding:.6rem 0;
+  border-bottom:1px solid var(--border);font-size:.78rem;
+}
+.file-row:last-child{border-bottom:none;}
+.file-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.file-dot.ok{background:var(--green2);box-shadow:0 0 4px var(--green2);}
+.file-dot.err{background:var(--red2);}
+.file-name{font-weight:500;flex:1;}
+.file-info{color:var(--muted);font-size:.72rem;}
 
-  /* CONFIG MODAL */
-  .modal-overlay {
-    display: none; position: fixed; inset: 0; background: #0008; z-index: 200;
-    align-items: center; justify-content: center;
-  }
-  .modal-overlay.open { display: flex; }
-  .modal {
-    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
-    padding: 2rem; width: 100%; max-width: 540px; box-shadow: 0 24px 64px #0006;
-  }
-  .modal h2 { font-size: 1.1rem; font-weight: 600; margin-bottom: 1.5rem; display: flex; align-items: center; gap: .5rem; }
-  .form-row { margin-bottom: 1.25rem; }
-  .form-row label { display: block; font-size: .8rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: .4rem; }
-  .form-row input {
-    width: 100%; background: var(--surface2); border: 1px solid var(--border);
-    color: var(--text); padding: .55rem .9rem; border-radius: 6px;
-    font-size: .875rem; font-family: inherit;
-  }
-  .form-row input:focus { outline: none; border-color: var(--blue); }
-  .form-row .hint { font-size: .75rem; color: var(--muted); margin-top: .3rem; }
-  .form-row .hint.ok { color: var(--green); }
-  .form-row .hint.err { color: var(--red); }
-  .modal-actions { display: flex; gap: .75rem; justify-content: flex-end; margin-top: 1.5rem; }
-  .btn-icon {
-    background: var(--surface2); border: 1px solid var(--border); color: var(--muted);
-    width: 36px; height: 36px; border-radius: 8px; cursor: pointer; font-size: 1rem;
-    display: flex; align-items: center; justify-content: center; transition: all .15s;
-  }
-  .btn-icon:hover { border-color: var(--blue); color: var(--text); }
+/* MODAL */
+.overlay{display:none;position:fixed;inset:0;background:#000c;z-index:500;align-items:center;justify-content:center;}
+.overlay.open{display:flex;}
+.modal{
+  background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);
+  padding:1.75rem;width:100%;max-width:580px;
+  box-shadow:0 24px 80px #0008;
+  max-height:90vh;overflow-y:auto;
+}
+.modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;}
+.modal-title{font-size:1rem;font-weight:700;display:flex;align-items:center;gap:.5rem;}
+.modal-close{background:none;border:none;color:var(--muted2);cursor:pointer;font-size:1.2rem;padding:.2rem;line-height:1;border-radius:4px;}
+.modal-close:hover{color:var(--text);}
+.config-section-title{
+  font-size:.68rem;font-weight:600;color:var(--blue2);text-transform:uppercase;
+  letter-spacing:.08em;margin:.75rem 0 .6rem;
+  padding:.3rem 0;border-bottom:1px solid var(--border);
+}
+.form-row{margin-bottom:.9rem;}
+.form-row label{display:block;font-size:.72rem;color:var(--muted2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.3rem;font-weight:500;}
+.form-row input{
+  width:100%;background:var(--surface2);border:1px solid var(--border2);
+  color:var(--text);padding:.45rem .75rem;border-radius:var(--radius);
+  font-size:.8rem;font-family:inherit;transition:border-color .15s;
+}
+.form-row input:focus{outline:none;border-color:var(--blue2);}
+.form-row-2{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;}
+.ref-row{display:flex;gap:.5rem;align-items:center;}
+.ref-row input{flex:1;}
+.ref-status{font-size:.9rem;flex-shrink:0;width:20px;text-align:center;}
+.hint{font-size:.7rem;color:var(--muted);margin-top:.25rem;}
+.hint.ok{color:var(--green2);}
+.hint.err{color:var(--red2);}
+.modal-actions{display:flex;gap:.5rem;justify-content:flex-end;margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--border);}
 
-  @media (max-width: 900px) {
-    .modules, .kpi-strip { grid-template-columns: 1fr 1fr; }
-  }
-  @media (max-width: 600px) {
-    .modules, .kpi-strip { grid-template-columns: 1fr; }
-    nav { gap: 1rem; padding: 0 1rem; }
-  }
+/* SPINNER */
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--border2);border-top-color:var(--blue2);border-radius:50%;animation:spin .6s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* FOOTER */
+footer{text-align:center;color:var(--muted);font-size:.72rem;padding:1.5rem;border-top:1px solid var(--border);}
+
+@media(max-width:900px){
+  .modules{grid-template-columns:1fr;}
+  .kpi-strip{grid-template-columns:repeat(2,1fr);}
+  .activity-grid{grid-template-columns:1fr;}
+}
 </style>
 </head>
 <body>
 
 <nav>
-  <div class="nav-logo">M<span>VALORACION</span></div>
+  <a class="nav-brand" href="/">
+    <div class="dot"></div>MVALORACION
+  </a>
+  <div class="nav-sep"></div>
   <div class="nav-links">
-    <a href="/" class="active">Inicio</a>
-    <a href="/insumos.html">Insumos</a>
-    <a href="/porfin.html">Porfin</a>
-    <a href="/mitra.html">Mitra</a>
-    <a href="/api/docs" target="_blank">API Docs</a>
+    <a href="/" class="active"><span class="icon">⊞</span>Dashboard</a>
+    <a href="/insumos.html"><span class="icon">◈</span>Insumos</a>
+    <a href="/porfin.html"><span class="icon">◉</span>Porfin</a>
+    <a href="/mitra.html"><span class="icon">◎</span>Mitra</a>
+    <a href="/api/docs" target="_blank"><span class="icon">⧉</span>API</a>
   </div>
-  <button class="btn-icon" onclick="abrirConfig()" title="Configuración de rutas" style="margin-left:auto;">⚙️</button>
+  <div class="nav-end">
+    <button class="btn-icon" onclick="abrirConfig()" title="Configuración">⚙</button>
+  </div>
 </nav>
 
-<!-- MODAL CONFIGURACIÓN -->
-<div class="modal-overlay" id="modal-config">
+<!-- Modal Config -->
+<div class="overlay" id="modal-config">
   <div class="modal">
-    <h2>⚙️ Configuración de Rutas</h2>
+    <div class="modal-header">
+      <div class="modal-title">⚙ Configuración de Rutas y Umbrales</div>
+      <button class="modal-close" onclick="cerrarConfig()">✕</button>
+    </div>
+
+    <div class="config-section-title">Directorio de Datos</div>
     <div class="form-row">
-      <label>Carpeta de datos (data_dir)</label>
-      <input type="text" id="cfg-data-dir" placeholder="Ej: C:/VALORACION/data o J:/VALORACION/DATOS"/>
-      <div class="hint" id="cfg-dir-hint">Ingresa la ruta donde están las carpetas por fecha (YYYYMMDD/)</div>
+      <label>Carpeta principal (data_dir)</label>
+      <input type="text" id="cfg-data-dir" placeholder="C:/VALORACION/data"/>
+      <div class="hint" id="cfg-dir-hint">Debe contener subcarpetas YYYYMMDD/</div>
+    </div>
+
+    <div class="config-section-title">Umbrales de Alerta</div>
+    <div class="form-row-2">
+      <div class="form-row">
+        <label>Variación precio (%)</label>
+        <input type="number" id="cfg-umbral-pct" step="0.5" min="0.5" max="50"/>
+        <div class="hint">Variaciones anormales en insumos</div>
+      </div>
+      <div class="form-row">
+        <label>Diferencia causación (COP)</label>
+        <input type="number" id="cfg-umbral-caus" step="0.5" min="0"/>
+        <div class="hint">Alerta si |Mer - TIR| supera este valor</div>
+      </div>
+    </div>
+
+    <div class="config-section-title">Archivos de Referencia</div>
+    <div class="form-row">
+      <label>Especies (Especies.csv)</label>
+      <div class="ref-row">
+        <input type="text" id="cfg-ref-especies" placeholder="Ruta a Especies.csv"/>
+        <span class="ref-status" id="hint-especies"></span>
+      </div>
     </div>
     <div class="form-row">
-      <label>Umbral variación de precio (%)</label>
-      <input type="number" id="cfg-umbral-pct" step="0.5" min="0.5" max="50"/>
-      <div class="hint">Variaciones por encima de este % se marcan como anormales</div>
+      <label>FCPE (Factores Cupones)</label>
+      <div class="ref-row">
+        <input type="text" id="cfg-ref-fcpe" placeholder="Ruta a FCPE.xlsx"/>
+        <span class="ref-status" id="hint-fcpe"></span>
+      </div>
     </div>
     <div class="form-row">
-      <label>Umbral diferencia causación (COP)</label>
-      <input type="number" id="cfg-umbral-caus" step="0.5" min="0"/>
-      <div class="hint">Diferencia mínima en causación para generar alerta</div>
+      <label>Fiduciaria</label>
+      <div class="ref-row">
+        <input type="text" id="cfg-ref-fiduciaria" placeholder="Ruta a FIDUCIARIA0210.xlsx"/>
+        <span class="ref-status" id="hint-fiduciaria"></span>
+      </div>
     </div>
+    <div class="form-row">
+      <label>Fondos (FONDOS.xlsx)</label>
+      <div class="ref-row">
+        <input type="text" id="cfg-ref-fondos" placeholder="Ruta a FONDOS.xlsx"/>
+        <span class="ref-status" id="hint-fondos"></span>
+      </div>
+    </div>
+    <div class="form-row">
+      <label>FCP (Fondos Comunes de Pensiones)</label>
+      <div class="ref-row">
+        <input type="text" id="cfg-ref-fcp" placeholder="Ruta a FCP.xlsx"/>
+        <span class="ref-status" id="hint-fcp"></span>
+      </div>
+    </div>
+
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="cerrarConfig()">Cancelar</button>
-      <button class="btn" onclick="verificarRuta()">Verificar ruta</button>
+      <button class="btn btn-ghost" onclick="verificarRutas()">🔍 Verificar rutas</button>
       <button class="btn" onclick="guardarConfig()">💾 Guardar</button>
     </div>
   </div>
 </div>
 
 <div class="hero">
-  <h1>Control Operativo de <span>Valoración</span></h1>
-  <p>Revisión de insumos, precios, causaciones y validaciones diarias para Porfin y Mitra</p>
+  <div class="hero-inner">
+    <div>
+      <div class="hero-badge"><div class="dot"></div>Sistema Activo</div>
+      <h1>Control Operativo de<br><span>Valoración Financiera</span></h1>
+      <p>Revisión exhaustiva de insumos, precios, causaciones y validaciones diarias para Porfin y Mitra. Detección de anomalías y trazabilidad de observaciones.</p>
+    </div>
+    <div style="display:flex;gap:1rem;">
+      <div style="text-align:center;padding:1.25rem 1.5rem;background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);">
+        <div style="font-size:1.75rem;font-weight:800;color:var(--blue2);" id="hero-fecha">—</div>
+        <div style="font-size:.72rem;color:var(--muted);margin-top:.25rem;text-transform:uppercase;letter-spacing:.06em;">Fecha activa</div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <div class="date-bar">
-  <label>Fecha de revisión:</label>
-  <select id="sel-fecha"><option value="">Cargando...</option></select>
-  <button class="btn" onclick="cargarResumen()">Actualizar Dashboard</button>
+  <label>Fecha de revisión</label>
+  <select id="sel-fecha" onchange="cargarResumen()"><option value="">Cargando...</option></select>
+  <button class="btn" style="margin-left:.5rem;" onclick="cargarResumen()">↺ Actualizar</button>
+  <span id="status-global" style="margin-left:auto;font-size:.75rem;color:var(--muted);"></span>
 </div>
 
-<!-- KPIs -->
-<div class="kpi-strip" id="kpi-strip">
-  <div class="kpi"><div class="kpi-label">Archivos Disponibles</div><div class="kpi-value" id="kpi-archivos">—</div><div class="kpi-sub">en la fecha seleccionada</div></div>
-  <div class="kpi"><div class="kpi-label">Alertas Porfin</div><div class="kpi-value" id="kpi-alertas-porfin">—</div><div class="kpi-sub">errores detectados</div></div>
-  <div class="kpi"><div class="kpi-label">Alertas Mitra</div><div class="kpi-value" id="kpi-alertas-mitra">—</div><div class="kpi-sub">precios + causaciones</div></div>
-  <div class="kpi"><div class="kpi-label">Proveedores Activos</div><div class="kpi-value" id="kpi-proveedores">—</div><div class="kpi-sub">SP, SW, MX, TP, NOTAS</div></div>
+<div class="kpi-strip">
+  <div class="kpi blue">
+    <div class="kpi-label">Archivos disponibles</div>
+    <div class="kpi-value" id="kpi-archivos">—</div>
+    <div class="kpi-sub">en la fecha seleccionada</div>
+  </div>
+  <div class="kpi" id="kpi-card-porfin">
+    <div class="kpi-label">Alertas Porfin 596</div>
+    <div class="kpi-value" id="kpi-alertas-porfin">—</div>
+    <div class="kpi-sub">errores detectados</div>
+  </div>
+  <div class="kpi" id="kpi-card-mitra">
+    <div class="kpi-label">Alertas Mitra</div>
+    <div class="kpi-value" id="kpi-alertas-mitra">—</div>
+    <div class="kpi-sub">precios + causaciones</div>
+  </div>
+  <div class="kpi" id="kpi-card-prov">
+    <div class="kpi-label">Proveedores activos</div>
+    <div class="kpi-value" id="kpi-proveedores">—</div>
+    <div class="kpi-sub">MX · NOTAS · SB · IND</div>
+  </div>
 </div>
 
-<!-- MÓDULOS -->
-<div class="modules">
-  <a class="module-card" href="/insumos.html">
-    <div class="module-icon">📊</div>
-    <h2>Insumos y Proveedores</h2>
-    <p>Compara precios entre SP, SW, MX, TP y NOTAS. Detecta variaciones anormales, títulos sin precio y diferencias entre fuentes.</p>
-    <div><span class="module-badge badge-blue">Comparador</span> <span class="module-badge badge-blue">Variaciones</span></div>
-  </a>
-  <a class="module-card" href="/porfin.html">
-    <div class="module-icon">🟢</div>
-    <h2>Revisión Porfin (596/575)</h2>
-    <p>Valida que los precios están bien cargados, la valoración es correcta según Circular 575/596, y revisa causaciones vs Infovalmer.</p>
-    <div><span class="module-badge badge-green">596</span> <span class="module-badge badge-green">575</span> <span class="module-badge badge-green">Errores</span></div>
-  </a>
-  <a class="module-card" href="/mitra.html">
-    <div class="module-icon">🔵</div>
-    <h2>Revisión Mitra</h2>
-    <p>Revisa VALORACION_DI/DF, causaciones, fuentes de precio, diferencias vs Porfin y observaciones automáticas por título.</p>
-    <div><span class="module-badge badge-orange">DI/DF</span> <span class="module-badge badge-orange">Causaciones</span> <span class="module-badge badge-orange">vs Porfin</span></div>
-  </a>
+<div class="modules-section">
+  <div class="section-header">
+    <div class="section-title">Módulos de revisión</div>
+  </div>
+  <div class="modules">
+    <a class="module-card insumos" href="/insumos.html">
+      <div class="mc-icon">◈</div>
+      <h2>Insumos y Proveedores</h2>
+      <p>Revisión exhaustiva de precios MX, NOTAS, SB. Variaciones diarias, anomalías, histórico por ISIN y comparación entre fuentes.</p>
+      <div class="mc-tags">
+        <span class="mc-tag">Variaciones</span>
+        <span class="mc-tag">Comparador</span>
+        <span class="mc-tag">Histórico</span>
+        <span class="mc-tag">Anomalías</span>
+      </div>
+      <div class="mc-footer">
+        <span>MX · NOTAS · SB · Monedas</span>
+        <span class="mc-arrow">→</span>
+      </div>
+    </a>
+    <a class="module-card porfin" href="/porfin.html">
+      <div class="mc-icon">◉</div>
+      <h2>Revisión Porfin 596/575</h2>
+      <p>Valida precios, valoración correcta, errores TIR/DV y causaciones por fondo. Observaciones por fila y exportación Excel oficial.</p>
+      <div class="mc-tags">
+        <span class="mc-tag">Posiciones 596</span>
+        <span class="mc-tag">Causaciones 575</span>
+        <span class="mc-tag">Fondos</span>
+        <span class="mc-tag">TIR/DV</span>
+      </div>
+      <div class="mc-footer">
+        <span>SKCLI596 · SKCLI575</span>
+        <span class="mc-arrow">→</span>
+      </div>
+    </a>
+    <a class="module-card mitra" href="/mitra.html">
+      <div class="mc-icon">◎</div>
+      <h2>Revisión Mitra</h2>
+      <p>Revisión VALORACION_DI/DF, causaciones, fuentes de precio, diferencias vs Porfin y observaciones automáticas por título.</p>
+      <div class="mc-tags">
+        <span class="mc-tag">DI / DF</span>
+        <span class="mc-tag">Causaciones</span>
+        <span class="mc-tag">vs Porfin</span>
+      </div>
+      <div class="mc-footer">
+        <span>VALORACION_DI · DF</span>
+        <span class="mc-arrow">→</span>
+      </div>
+    </a>
+  </div>
 </div>
 
-<!-- ACTIVIDAD RECIENTE -->
-<div class="section">
-  <div class="section-title">Estado de archivos — fecha seleccionada</div>
-  <div class="activity-list" id="activity-list">
-    <div class="activity-item"><div class="spinner"></div><span>Cargando estado...</span></div>
+<div class="activity-section">
+  <div class="section-header">
+    <div class="section-title">Estado de archivos — fecha seleccionada</div>
+  </div>
+  <div class="activity-grid">
+    <div class="activity-card">
+      <div class="activity-card-title">Proveedores de precio</div>
+      <div id="list-proveedores"><div style="color:var(--muted);font-size:.8rem;"><span class="spinner"></span> Cargando...</div></div>
+    </div>
+    <div class="activity-card">
+      <div class="activity-card-title">Archivos Porfin / Mitra</div>
+      <div id="list-modulos"><div style="color:var(--muted);font-size:.8rem;"><span class="spinner"></span> Cargando...</div></div>
+    </div>
   </div>
 </div>
 
 <footer>MVALORACION © 2026 — Skandia Colombia · Valoración Financiera</footer>
 
 <script>
-const API = '';
+const API='';
+async function fetchJSON(u){const r=await fetch(API+u);if(!r.ok)throw new Error(r.statusText);return r.json();}
 
-async function fetchJSON(url) {
-  const r = await fetch(API + url);
-  if (!r.ok) throw new Error(r.statusText);
-  return r.json();
+async function cargarFechas(){
+  const sel=document.getElementById('sel-fecha');
+  try{
+    const d=await fetchJSON('/api/insumos/fechas');
+    const f=(d.fechas||[]).slice().reverse();
+    sel.innerHTML=f.map(x=>`<option value="${x}">${fmtFecha(x)}</option>`).join('');
+    if(f.length){document.getElementById('hero-fecha').textContent=fmtFecha(f[0]);cargarResumen();}
+  }catch(e){sel.innerHTML='<option value="">Error cargando fechas</option>';}
 }
 
-async function cargarFechas() {
-  const sel = document.getElementById('sel-fecha');
-  try {
-    const data = await fetchJSON('/api/insumos/fechas');
-    const fechas = (data.fechas || []).reverse();
-    sel.innerHTML = fechas.map(f => `<option value="${f}">${f.slice(0,4)}-${f.slice(4,6)}-${f.slice(6)}</option>`).join('');
-    if (fechas.length) cargarResumen();
-  } catch(e) {
-    sel.innerHTML = '<option value="">Error cargando fechas</option>';
-  }
+function fmtFecha(f){return f?`${f.slice(0,4)}-${f.slice(4,6)}-${f.slice(6)}`:'—';}
+
+async function cargarResumen(){
+  const fecha=document.getElementById('sel-fecha').value;
+  if(!fecha)return;
+  document.getElementById('hero-fecha').textContent=fmtFecha(fecha);
+  document.getElementById('status-global').textContent='Actualizando...';
+  await Promise.all([cargarArchivos(fecha),cargarKpiPorfin(fecha),cargarKpiMitra(fecha)]);
+  document.getElementById('status-global').textContent=`Última actualización: ${new Date().toLocaleTimeString('es-CO')}`;
 }
 
-async function cargarResumen() {
-  const fecha = document.getElementById('sel-fecha').value;
-  if (!fecha) return;
+async function cargarArchivos(fecha){
+  try{
+    const d=await fetchJSON(`/api/insumos/archivos_disponibles/${fecha}`);
+    const entries=Object.entries(d);
+    const proveedores=['MX','MX_RV','NOTAS','SB','IND'];
+    const modulos=['MONEDAS'];
 
-  // Archivos disponibles
-  try {
-    const data = await fetchJSON(`/api/insumos/archivos_disponibles/${fecha}`);
-    const activos = Object.values(data).filter(v => v.disponible).length;
-    const total   = Object.keys(data).length;
-    const el = document.getElementById('kpi-archivos');
-    el.textContent = `${activos}/${total}`;
-    el.className = 'kpi-value ' + (activos >= 4 ? 'ok' : activos >= 2 ? 'warn' : 'err');
-    document.getElementById('kpi-proveedores').textContent = activos;
-    document.getElementById('kpi-proveedores').className = 'kpi-value ' + (activos >= 3 ? 'ok' : 'warn');
+    const activos=entries.filter(([,v])=>v.disponible).length;
+    const total=entries.length;
+    const el=document.getElementById('kpi-archivos');
+    el.textContent=`${activos}/${total}`;
+    const kCard=document.getElementById('kpi-archivos').closest('.kpi');
+    kCard.className='kpi '+(activos>=5?'ok':activos>=3?'warn':'err');
+    document.getElementById('kpi-proveedores').textContent=activos;
+    document.getElementById('kpi-card-prov').className='kpi '+(activos>=4?'ok':activos>=2?'warn':'err');
 
-    // Activity list
-    const list = document.getElementById('activity-list');
-    list.innerHTML = Object.entries(data).map(([nombre, info]) => `
-      <div class="activity-item">
-        <div class="dot ${info.disponible ? 'dot-green' : 'dot-red'}"></div>
-        <span><strong>${nombre}</strong> — ${info.disponible ? `${info.filas} registros` : 'No disponible'}</span>
-        <span class="ts">${fecha.slice(0,4)}-${fecha.slice(4,6)}-${fecha.slice(6)}</span>
+    // Proveedores list
+    const provList=entries.filter(([k])=>proveedores.includes(k)||!['MONEDAS'].includes(k));
+    document.getElementById('list-proveedores').innerHTML=provList.map(([k,v])=>`
+      <div class="file-row">
+        <div class="file-dot ${v.disponible?'ok':'err'}"></div>
+        <div class="file-name">${k}</div>
+        <div class="file-info">${v.disponible?`${(v.filas||0).toLocaleString()} registros`:'No disponible'}</div>
+      </div>`).join('');
+
+    document.getElementById('list-modulos').innerHTML=`
+      <div class="file-row"><div class="file-dot ${d.MONEDAS?.disponible?'ok':'err'}"></div>
+        <div class="file-name">Monedas</div>
+        <div class="file-info">${d.MONEDAS?.disponible?`${(d.MONEDAS.filas||0)} registros`:'No disponible'}</div>
       </div>
-    `).join('');
-  } catch(e) {
-    document.getElementById('activity-list').innerHTML = `<div class="activity-item"><div class="dot dot-red"></div><span>Error: ${e.message}</span></div>`;
+      <div class="file-row"><div class="file-dot ok"></div><div class="file-name">Porfin 596/575</div><div class="file-info">Ver módulo Porfin</div></div>
+      <div class="file-row"><div class="file-dot ok"></div><div class="file-name">Mitra DI/DF</div><div class="file-info">Ver módulo Mitra</div></div>
+    `;
+  }catch(e){
+    document.getElementById('list-proveedores').innerHTML=`<div style="color:var(--red2);font-size:.8rem;">Error: ${e.message}</div>`;
   }
+}
 
-  // KPIs Porfin
-  try {
-    const data = await fetchJSON(`/api/porfin/errores/${fecha}`);
-    const el = document.getElementById('kpi-alertas-porfin');
-    el.textContent = data.total_errores ?? '—';
-    el.className = 'kpi-value ' + (data.total_errores === 0 ? 'ok' : data.total_errores < 10 ? 'warn' : 'err');
-  } catch(e) {
-    document.getElementById('kpi-alertas-porfin').textContent = '—';
-  }
+async function cargarKpiPorfin(fecha){
+  try{
+    const d=await fetchJSON(`/api/porfin/errores/${fecha}`);
+    const n=d.total_errores??0;
+    document.getElementById('kpi-alertas-porfin').textContent=n.toLocaleString();
+    document.getElementById('kpi-card-porfin').className='kpi '+(n===0?'ok':n<20?'warn':'err');
+  }catch(e){document.getElementById('kpi-alertas-porfin').textContent='—';}
+}
 
-  // KPIs Mitra
-  try {
-    const data = await fetchJSON(`/api/mitra/resumen/${fecha}`);
-    const alertas = (data.alertas_causacion || 0) + (data.alertas_precio || 0) + (data.sin_precio || 0);
-    const el = document.getElementById('kpi-alertas-mitra');
-    el.textContent = alertas;
-    el.className = 'kpi-value ' + (alertas === 0 ? 'ok' : alertas < 10 ? 'warn' : 'err');
-  } catch(e) {
-    document.getElementById('kpi-alertas-mitra').textContent = '—';
-  }
+async function cargarKpiMitra(fecha){
+  try{
+    const d=await fetchJSON(`/api/mitra/resumen/${fecha}`);
+    const n=(d.alertas_causacion||0)+(d.alertas_precio||0)+(d.sin_precio||0);
+    document.getElementById('kpi-alertas-mitra').textContent=n.toLocaleString();
+    document.getElementById('kpi-card-mitra').className='kpi '+(n===0?'ok':n<10?'warn':'err');
+  }catch(e){document.getElementById('kpi-alertas-mitra').textContent='—';}
 }
 
 cargarFechas();
 
-// ── Configuración ───────────────────────────────────────────────────────
-async function abrirConfig() {
-  try {
-    const cfg = await fetchJSON('/api/config');
-    document.getElementById('cfg-data-dir').value   = cfg.data_dir || '';
-    document.getElementById('cfg-umbral-pct').value  = cfg.umbral_variacion_pct ?? 5;
-    document.getElementById('cfg-umbral-caus').value = cfg.umbral_dif_causacion ?? 1;
-    const hint = document.getElementById('cfg-dir-hint');
-    hint.textContent = cfg.data_dir_exists ? '✓ Carpeta encontrada' : '⚠ Carpeta no encontrada';
-    hint.className = 'hint ' + (cfg.data_dir_exists ? 'ok' : 'err');
-  } catch(e) {
-    console.error('Error cargando config:', e);
-  }
+// ── Config ──────────────────────────────────────────────────────────────
+async function abrirConfig(){
+  try{
+    const c=await fetchJSON('/api/config');
+    document.getElementById('cfg-data-dir').value=c.data_dir||'';
+    document.getElementById('cfg-umbral-pct').value=c.umbral_variacion_pct??5;
+    document.getElementById('cfg-umbral-caus').value=c.umbral_dif_causacion??1;
+    document.getElementById('cfg-ref-especies').value=c.ref_especies||'';
+    document.getElementById('cfg-ref-fcpe').value=c.ref_fcpe||'';
+    document.getElementById('cfg-ref-fiduciaria').value=c.ref_fiduciaria||'';
+    document.getElementById('cfg-ref-fondos').value=c.ref_fondos||'';
+    document.getElementById('cfg-ref-fcp').value=c.ref_fcp||'';
+    const h=document.getElementById('cfg-dir-hint');
+    h.textContent=c.data_dir_exists?'✓ Carpeta encontrada':'⚠ Carpeta no encontrada';
+    h.className='hint '+(c.data_dir_exists?'ok':'err');
+    ['especies','fcpe','fiduciaria','fondos','fcp'].forEach(k=>{
+      const el=document.getElementById('hint-'+k);
+      if(el){el.textContent=c['ref_'+k+'_exists']?'✓':'✗';el.style.color=c['ref_'+k+'_exists']?'var(--green2)':'var(--red2)';}
+    });
+  }catch(e){console.error(e);}
   document.getElementById('modal-config').classList.add('open');
 }
+function cerrarConfig(){document.getElementById('modal-config').classList.remove('open');}
 
-function cerrarConfig() {
-  document.getElementById('modal-config').classList.remove('open');
-}
-
-async function verificarRuta() {
-  const dir = document.getElementById('cfg-data-dir').value.trim();
-  if (!dir) return;
-  const hint = document.getElementById('cfg-dir-hint');
-  hint.textContent = 'Verificando...';
-  hint.className = 'hint';
-  try {
-    const r = await fetch('/api/config', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({data_dir: dir})
-    });
-    const d = await r.json();
-    const existe = d.config?.data_dir_exists ?? false;
-    // Re-fetch para verificar
-    const cfg = await fetchJSON('/api/config');
-    hint.textContent = cfg.data_dir_exists ? '✓ Carpeta encontrada y guardada' : '⚠ Carpeta no encontrada (se guardó de todas formas)';
-    hint.className = 'hint ' + (cfg.data_dir_exists ? 'ok' : 'err');
-  } catch(e) {
-    hint.textContent = 'Error al verificar: ' + e.message;
-    hint.className = 'hint err';
-  }
-}
-
-async function guardarConfig() {
-  const body = {
-    data_dir: document.getElementById('cfg-data-dir').value.trim() || undefined,
-    umbral_variacion_pct: parseFloat(document.getElementById('cfg-umbral-pct').value) || undefined,
-    umbral_dif_causacion: parseFloat(document.getElementById('cfg-umbral-caus').value) || undefined,
+function _cfgBody(){
+  const v=id=>document.getElementById(id).value.trim()||undefined;
+  return{
+    data_dir:v('cfg-data-dir'),
+    umbral_variacion_pct:parseFloat(document.getElementById('cfg-umbral-pct').value)||undefined,
+    umbral_dif_causacion:parseFloat(document.getElementById('cfg-umbral-caus').value)||undefined,
+    ref_especies:v('cfg-ref-especies'),ref_fcpe:v('cfg-ref-fcpe'),
+    ref_fiduciaria:v('cfg-ref-fiduciaria'),ref_fondos:v('cfg-ref-fondos'),ref_fcp:v('cfg-ref-fcp'),
   };
-  try {
-    const r = await fetch('/api/config', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(body)
-    });
-    const d = await r.json();
-    if (d.ok) {
-      cerrarConfig();
-      cargarFechas(); // Recargar con la nueva ruta
-    } else {
-      alert('Error guardando configuración: ' + (d.msg || 'desconocido'));
-    }
-  } catch(e) {
-    alert('Error: ' + e.message);
-  }
 }
-
-// Cerrar modal al hacer click fuera
-document.getElementById('modal-config').addEventListener('click', function(e) {
-  if (e.target === this) cerrarConfig();
-});
+async function verificarRutas(){
+  await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(_cfgBody())});
+  const c=await fetchJSON('/api/config');
+  const h=document.getElementById('cfg-dir-hint');
+  h.textContent=c.data_dir_exists?'✓ Carpeta encontrada':'⚠ Carpeta no encontrada';
+  h.className='hint '+(c.data_dir_exists?'ok':'err');
+  ['especies','fcpe','fiduciaria','fondos','fcp'].forEach(k=>{
+    const el=document.getElementById('hint-'+k);
+    if(el){el.textContent=c['ref_'+k+'_exists']?'✓':'✗';el.style.color=c['ref_'+k+'_exists']?'var(--green2)':'var(--red2)';}
+  });
+}
+async function guardarConfig(){
+  try{
+    const r=await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(_cfgBody())});
+    const d=await r.json();
+    if(d.ok){cerrarConfig();cargarFechas();}else alert('Error: '+(d.msg||'desconocido'));
+  }catch(e){alert('Error: '+e.message);}
+}
+document.getElementById('modal-config').addEventListener('click',e=>{if(e.target===e.currentTarget)cerrarConfig();});
 </script>
 </body>
 </html>

@@ -3,321 +3,1073 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>Porfin — MVALORACION</title>
+<title>Porfin 596/575 — MVALORACION</title>
 <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
 <style>
-  :root{--bg:#0d1117;--surface:#161b22;--surface2:#21262d;--border:#30363d;--text:#e6edf3;--muted:#8b949e;--green:#3fb950;--blue:#58a6ff;--orange:#f0883e;--red:#f85149;--purple:#bc8cff;--yellow:#e3b341;--accent:#1f6feb;}
-  *{box-sizing:border-box;margin:0;padding:0;}
-  body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);}
-  nav{background:var(--surface);border-bottom:1px solid var(--border);padding:0 2rem;display:flex;align-items:center;gap:2rem;height:56px;position:sticky;top:0;z-index:100;}
-  .nav-logo{font-weight:700;font-size:1.1rem;color:var(--blue);}
-  .nav-logo span{color:var(--green);}
-  .nav-links{display:flex;gap:.25rem;}
-  .nav-links a{color:var(--muted);text-decoration:none;padding:.4rem .9rem;border-radius:6px;font-size:.875rem;font-weight:500;transition:all .15s;}
-  .nav-links a:hover,.nav-links a.active{background:var(--surface2);color:var(--text);}
-  .nav-links a.active{border-bottom:2px solid var(--green);border-radius:6px 6px 0 0;}
-  .page-header{padding:2rem;border-bottom:1px solid var(--border);}
-  .page-header h1{font-size:1.5rem;font-weight:700;margin-bottom:.25rem;}
-  .page-header p{color:var(--muted);font-size:.9rem;}
-  .toolbar{display:flex;flex-wrap:wrap;gap:1rem;align-items:flex-end;padding:1rem 2rem;background:var(--surface);border-bottom:1px solid var(--border);}
-  .toolbar label{color:var(--muted);font-size:.78rem;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:.2rem;}
-  .toolbar select,.toolbar input{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:.4rem .8rem;border-radius:6px;font-size:.875rem;font-family:inherit;}
-  .btn{background:var(--accent);color:#fff;border:none;padding:.4rem 1.1rem;border-radius:6px;font-size:.875rem;font-weight:500;cursor:pointer;font-family:inherit;transition:opacity .15s;}
-  .btn:hover{opacity:.85;}
-  .btn-ghost{background:var(--surface2);color:var(--text);border:1px solid var(--border);}
-  .content{padding:1.5rem 2rem;max-width:1400px;margin:0 auto;}
-  .kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:1rem;margin-bottom:1.5rem;}
-  .kpi{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.25rem;}
-  .kpi .label{color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.04em;margin-bottom:.3rem;}
-  .kpi .val{font-size:1.4rem;font-weight:700;}
-  .kpi .sub{color:var(--muted);font-size:.75rem;margin-top:.2rem;}
-  .ok{color:#3fb950;}.warn{color:#e3b341;}.err{color:#f85149;}
-  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:1.5rem;}
-  .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.25rem;}
-  .card-title{font-size:.82rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:.9rem;display:flex;align-items:center;gap:.5rem;}
-  .tabs{display:flex;gap:.25rem;margin-bottom:1rem;border-bottom:1px solid var(--border);}
-  .tab{padding:.5rem 1rem;cursor:pointer;font-size:.875rem;font-weight:500;color:var(--muted);border-bottom:2px solid transparent;transition:all .15s;}
-  .tab.active{color:var(--green);border-color:var(--green);}
-  .tab-panel{display:none;}.tab-panel.active{display:block;}
-  .table-wrap{overflow-x:auto;border-radius:8px;border:1px solid var(--border);}
-  table{width:100%;border-collapse:collapse;font-size:.8rem;}
-  thead tr{background:var(--surface2);}
-  th{padding:.55rem .9rem;text-align:left;color:var(--muted);font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;border-bottom:1px solid var(--border);}
-  td{padding:.5rem .9rem;border-bottom:1px solid var(--border);white-space:nowrap;}
-  tr:last-child td{border-bottom:none;}
-  tr:hover td{background:var(--surface2);}
-  .badge{display:inline-block;padding:.15rem .5rem;border-radius:4px;font-size:.72rem;font-weight:600;}
-  .badge-green{background:#3fb95033;color:var(--green);}
-  .badge-red{background:#f8514933;color:var(--red);}
-  .badge-yellow{background:#e3b34133;color:var(--yellow);}
-  .badge-blue{background:#1f6feb33;color:var(--blue);}
-  .badge-orange{background:#f0883e33;color:var(--orange);}
-  .sev-ALTO{color:var(--red);font-weight:700;}
-  .sev-MEDIO{color:var(--yellow);font-weight:600;}
-  .sev-BAJO{color:var(--muted);}
-  .spinner{display:inline-block;width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--green);border-radius:50%;animation:spin .6s linear infinite;}
-  @keyframes spin{to{transform:rotate(360deg);}}
-  .empty{color:var(--muted);text-align:center;padding:2rem;font-size:.9rem;}
-  .filters{display:flex;gap:.75rem;margin-bottom:1rem;flex-wrap:wrap;align-items:center;}
-  .filters select,.filters input{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:.35rem .75rem;border-radius:6px;font-size:.85rem;}
-  .filters label{display:flex;align-items:center;gap:.3rem;font-size:.85rem;color:var(--text);}
-  @media(max-width:900px){.kpi-row{grid-template-columns:repeat(2,1fr);}.grid-2{grid-template-columns:1fr;}}
+:root{
+  --bg:#080c10;--surface:#0d1117;--surface2:#161b22;--surface3:#21262d;
+  --border:#21262d;--border2:#30363d;--text:#e6edf3;--muted:#6e7681;--muted2:#8b949e;
+  --green:#2ea043;--green2:#3fb950;--blue:#1f6feb;--blue2:#58a6ff;
+  --orange:#d18616;--orange2:#f0883e;--red:#b91c1c;--red2:#f85149;
+  --purple:#6e40c9;--purple2:#bc8cff;--yellow:#9e6a03;--yellow2:#e3b341;
+  --accent:#1f6feb;--accent-hover:#388bfd;
+  --radius:6px;--radius-lg:10px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:13px;}
+::-webkit-scrollbar{width:5px;height:5px;}
+::-webkit-scrollbar-track{background:var(--surface);}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
+
+/* NAV */
+nav{background:var(--surface);border-bottom:1px solid var(--border2);padding:0 1.25rem;display:flex;align-items:center;gap:.75rem;height:48px;position:sticky;top:0;z-index:200;}
+.nav-brand{font-weight:800;font-size:.9rem;color:var(--text);letter-spacing:.06em;display:flex;align-items:center;gap:.4rem;text-decoration:none;white-space:nowrap;}
+.nav-brand .dot{width:7px;height:7px;border-radius:50%;background:var(--green2);}
+.nav-sep{width:1px;height:18px;background:var(--border2);}
+.nav-links{display:flex;gap:.1rem;flex:1;}
+.nav-links a{color:var(--muted2);text-decoration:none;padding:.3rem .65rem;border-radius:var(--radius);font-size:.78rem;font-weight:500;transition:all .15s;}
+.nav-links a:hover{background:var(--surface2);color:var(--text);}
+.nav-links a.active{background:var(--surface3);color:var(--text);}
+.nav-end{display:flex;align-items:center;gap:.5rem;margin-left:auto;}
+
+/* BTNS */
+.btn{background:var(--accent);color:#fff;border:none;padding:.35rem .85rem;border-radius:var(--radius);font-size:.78rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;display:inline-flex;align-items:center;gap:.3rem;white-space:nowrap;}
+.btn:hover{background:var(--accent-hover);}
+.btn-ghost{background:transparent;color:var(--muted2);border:1px solid var(--border2);}
+.btn-ghost:hover{background:var(--surface2);color:var(--text);}
+.btn-green{background:#1a4731;color:var(--green2);border:1px solid var(--green);}
+.btn-green:hover{background:#1f5f40;}
+.btn-warn{background:#f0883e18;color:var(--orange2);border:1px solid var(--orange);}
+.btn-sm{padding:.25rem .55rem;font-size:.72rem;}
+
+/* TOOLBAR */
+.toolbar{
+  background:var(--surface);border-bottom:1px solid var(--border2);
+  padding:.6rem 1.25rem;display:flex;align-items:flex-end;gap:.65rem;flex-wrap:wrap;
+}
+.tb-group{display:flex;flex-direction:column;gap:.2rem;}
+.tb-group label{font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:500;}
+.tb-group select,.tb-group input[type=text]{
+  background:var(--surface2);border:1px solid var(--border2);color:var(--text);
+  padding:.32rem .65rem;border-radius:var(--radius);font-size:.78rem;font-family:inherit;
+}
+.tb-group select:focus,.tb-group input:focus{outline:none;border-color:var(--blue2);}
+
+/* KPI BAND */
+.kpi-band{
+  display:grid;grid-template-columns:repeat(6,1fr);gap:.5rem;
+  padding:.75rem 1.25rem;background:var(--bg);border-bottom:1px solid var(--border);
+}
+.kpi{background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:.8rem 1rem;position:relative;overflow:hidden;}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--kpi-c,var(--blue2));opacity:.5;}
+.kpi-label{font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.35rem;}
+.kpi-value{font-size:1.25rem;font-weight:700;color:var(--kpi-c,var(--text));line-height:1;}
+.kpi-sub{font-size:.65rem;color:var(--muted);margin-top:.25rem;}
+.kpi.ok{--kpi-c:var(--green2);}
+.kpi.warn{--kpi-c:var(--yellow2);}
+.kpi.err{--kpi-c:var(--red2);}
+.kpi.blue{--kpi-c:var(--blue2);}
+.kpi.purple{--kpi-c:var(--purple2);}
+.kpi.yellow{--kpi-c:var(--yellow2);}
+
+/* TABS */
+.tab-bar{
+  background:var(--surface);border-bottom:1px solid var(--border2);
+  padding:0 1.25rem;display:flex;gap:0;overflow-x:auto;
+}
+.tab{
+  padding:.7rem .9rem;cursor:pointer;font-size:.78rem;font-weight:500;
+  color:var(--muted2);border-bottom:2px solid transparent;white-space:nowrap;
+  transition:all .15s;display:flex;align-items:center;gap:.3rem;
+}
+.tab:hover{color:var(--text);}
+.tab.active{color:var(--green2);border-bottom-color:var(--green2);}
+.tab-badge{
+  padding:.05rem .35rem;border-radius:10px;font-size:.65rem;font-weight:700;
+  background:var(--red2);color:#fff;min-width:18px;text-align:center;
+}
+.tab-badge.warn{background:var(--yellow2);color:#000;}
+.tab-panel{display:none;padding:1rem 1.25rem;}
+.tab-panel.active{display:block;}
+
+/* CARDS */
+.card{background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:1rem;}
+.card-title{font-size:.72rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.75rem;display:flex;align-items:center;gap:.4rem;}
+.badge-cnt{background:var(--surface3);border:1px solid var(--border2);border-radius:8px;padding:.05rem .35rem;font-size:.65rem;color:var(--text);}
+.chart-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem;margin-bottom:.75rem;}
+.chart-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:.75rem;}
+
+/* TABLES */
+.table-wrap{overflow-x:auto;border-radius:var(--radius-lg);border:1px solid var(--border2);max-height:500px;overflow-y:auto;}
+table{width:100%;border-collapse:collapse;font-size:.75rem;}
+th{background:var(--surface2);padding:.5rem .65rem;text-align:left;font-weight:600;color:var(--muted);font-size:.65rem;text-transform:uppercase;letter-spacing:.04em;position:sticky;top:0;z-index:2;border-bottom:1px solid var(--border2);white-space:nowrap;}
+td{padding:.4rem .65rem;border-bottom:1px solid var(--border);white-space:nowrap;}
+tr:hover td{background:var(--surface2);}
+tr.alert-row td{background:#f8514912;}
+tr.alert-row:hover td{background:#f8514922;}
+tr.obs-row td{background:#e3b34110;}
+.n-pos{color:var(--green2);}
+.n-neg{color:var(--red2);}
+
+/* BADGES */
+.badge{display:inline-flex;align-items:center;padding:.1rem .4rem;border-radius:4px;font-size:.65rem;font-weight:700;}
+.badge-red{background:#f8514920;color:var(--red2);}
+.badge-yellow{background:#e3b34120;color:var(--yellow2);}
+.badge-green{background:#3fb95020;color:var(--green2);}
+.badge-blue{background:#58a6ff20;color:var(--blue2);}
+.badge-orange{background:#f0883e20;color:var(--orange2);}
+
+/* FILTER BAR */
+.filter-bar{display:flex;gap:.5rem;align-items:center;margin-bottom:.75rem;flex-wrap:wrap;}
+.filter-bar input,.filter-bar select{
+  background:var(--surface2);border:1px solid var(--border2);color:var(--text);
+  padding:.3rem .6rem;border-radius:var(--radius);font-size:.75rem;font-family:inherit;
+}
+.filter-bar input:focus,.filter-bar select:focus{outline:none;border-color:var(--blue2);}
+
+/* ALERT BANNERS */
+.banner{display:flex;align-items:center;gap:.6rem;padding:.55rem 1rem;border-radius:var(--radius);font-size:.78rem;margin-bottom:.75rem;}
+.banner.err{background:#f8514912;border:1px solid #f8514940;color:var(--red2);}
+.banner.warn{background:#e3b34112;border:1px solid #e3b34140;color:var(--yellow2);}
+.banner.ok{background:#3fb95012;border:1px solid #3fb95040;color:var(--green2);}
+.banner.info{background:#58a6ff12;border:1px solid #58a6ff40;color:var(--blue2);}
+
+/* OBS */
+.obs-cell{display:flex;align-items:center;gap:.3rem;min-width:150px;}
+.obs-input{
+  background:transparent;border:none;border-bottom:1px solid var(--border2);
+  color:var(--text);font-family:inherit;font-size:.72rem;padding:.1rem .25rem;
+  width:130px;outline:none;transition:border-color .15s;
+}
+.obs-input:focus{border-bottom-color:var(--blue2);}
+.obs-input.has-obs{border-bottom-color:var(--yellow2);color:var(--yellow2);}
+.obs-btn{background:none;border:none;cursor:pointer;color:var(--muted);font-size:.8rem;padding:.1rem;transition:color .15s;}
+.obs-btn:hover{color:var(--green2);}
+
+/* UPLOAD ZONE */
+.upload-zone{border:2px dashed var(--border2);border-radius:var(--radius-lg);padding:1.5rem;text-align:center;cursor:pointer;transition:all .2s;}
+.upload-zone:hover,.upload-zone.drag-over{border-color:var(--blue2);background:#1f6feb0a;}
+.upload-zone input{display:none;}
+.uz-icon{font-size:1.5rem;margin-bottom:.5rem;}
+.uz-text{color:var(--muted2);font-size:.8rem;}
+.uz-text strong{color:var(--text);}
+
+/* MODAL */
+.overlay{display:none;position:fixed;inset:0;background:#000b;z-index:600;align-items:center;justify-content:center;}
+.overlay.open{display:flex;}
+.modal{background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:1.5rem;width:460px;max-width:95vw;box-shadow:0 24px 80px #0008;}
+.modal h3{font-size:.95rem;font-weight:700;margin-bottom:1.1rem;display:flex;align-items:center;justify-content:space-between;}
+.modal-close{background:none;border:none;color:var(--muted2);cursor:pointer;font-size:1.1rem;}
+.form-group{margin-bottom:.9rem;}
+.form-group label{display:block;font-size:.72rem;color:var(--muted2);margin-bottom:.3rem;text-transform:uppercase;letter-spacing:.04em;}
+.form-group input{width:100%;background:var(--surface2);border:1px solid var(--border2);color:var(--text);padding:.4rem .65rem;border-radius:var(--radius);font-size:.8rem;font-family:inherit;}
+.form-group input:focus{outline:none;border-color:var(--blue2);}
+.prog-bar{height:3px;background:var(--border2);border-radius:2px;overflow:hidden;margin-top:.4rem;}
+.prog-fill{height:100%;background:var(--green2);width:0%;transition:width .3s;}
+
+/* FONDOS DETAIL */
+.fondo-kpis{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.75rem;}
+.fondo-kpi{padding:.35rem .75rem;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius);font-size:.75rem;}
+.fondo-kpi span{color:var(--muted);}
+
+/* SPINNER */
+.spinner{display:inline-block;width:13px;height:13px;border:2px solid var(--border2);border-top-color:var(--blue2);border-radius:50%;animation:spin .6s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.empty{text-align:center;padding:2rem;color:var(--muted);font-size:.8rem;}
+
+/* TIR SUBTABS */
+.subtab-bar{display:flex;gap:.35rem;margin-bottom:.75rem;border-bottom:1px solid var(--border);padding-bottom:.5rem;}
+.subtab{padding:.3rem .75rem;border-radius:var(--radius);font-size:.75rem;font-weight:600;cursor:pointer;border:1px solid var(--border2);color:var(--muted2);transition:all .15s;}
+.subtab.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+
+/* PILLS ROW */
+.pills{display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:.75rem;}
+.pill{
+  padding:.2rem .65rem;border-radius:20px;font-size:.72rem;font-weight:600;
+  background:var(--surface2);border:1px solid var(--border2);
+  display:inline-flex;gap:.3rem;
+}
+.pill span{color:var(--muted);}
+.pill strong{color:var(--text);}
+.pill.green strong{color:var(--green2);}
+.pill.blue strong{color:var(--blue2);}
+.pill.yellow strong{color:var(--yellow2);}
+.pill.red strong{color:var(--red2);}
+.pill.purple strong{color:var(--purple2);}
+.pill.orange strong{color:var(--orange2);}
+
+@media(max-width:1200px){.kpi-band{grid-template-columns:repeat(3,1fr);}.chart-grid-3{grid-template-columns:1fr 1fr;}}
+@media(max-width:768px){.kpi-band{grid-template-columns:repeat(2,1fr);}.chart-grid-3{grid-template-columns:1fr;}.toolbar{flex-direction:column;align-items:stretch;}}
 </style>
 </head>
 <body>
+
 <nav>
-  <div class="nav-logo">M<span>VALORACION</span></div>
+  <a class="nav-brand" href="/"><div class="dot"></div>MVALORACION</a>
+  <div class="nav-sep"></div>
   <div class="nav-links">
-    <a href="/">Inicio</a>
-    <a href="/insumos.html">Insumos</a>
-    <a href="/porfin.html" class="active">Porfin</a>
-    <a href="/mitra.html">Mitra</a>
+    <a href="/">⊞ Dashboard</a>
+    <a href="/insumos.html">◈ Insumos</a>
+    <a href="/porfin.html" class="active">◉ Porfin 596/575</a>
+    <a href="/mitra.html">◎ Mitra</a>
   </div>
-  <button onclick="window.location='/'" style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--muted);font-size:.875rem;padding:.4rem .8rem;border-radius:6px;" title="Ir al inicio para configurar rutas">⚙️ Config</button>
+  <div class="nav-end">
+    <button class="btn btn-green btn-sm" onclick="abrirUpload()">⬆ Cargar</button>
+    <button class="btn btn-ghost btn-sm" onclick="descargarExcel()">📥 Excel</button>
+    <button class="btn btn-ghost btn-sm" onclick="exportarCSV()">⬇ CSV</button>
+  </div>
 </nav>
 
-<div class="page-header">
-  <h1>🟢 Revisión Porfin — 596 / 575</h1>
-  <p>Validación de precios, valoración según Circulares 575/596, causaciones y detección de errores operativos</p>
+<!-- Modal Upload -->
+<div class="overlay" id="modal-upload">
+  <div class="modal">
+    <h3>⬆ Cargar archivo del día<button class="modal-close" onclick="cerrarUpload()">✕</button></h3>
+    <div class="form-group">
+      <label>Fecha (YYYYMMDD)</label>
+      <input type="text" id="up-fecha" placeholder="20260515" maxlength="8"/>
+    </div>
+    <div class="upload-zone" id="drop-596"
+      ondragover="event.preventDefault();this.classList.add('drag-over')"
+      ondragleave="this.classList.remove('drag-over')"
+      ondrop="handleDrop(event,'596')" onclick="document.getElementById('file-596').click()">
+      <input type="file" id="file-596" accept=".csv,.CSV,.txt,.TXT" onchange="handleFile(this,'596')"/>
+      <div class="uz-icon">📄</div>
+      <div class="uz-text"><strong>Archivo 596</strong> (SKCLI596)<br><small id="name-596" style="color:var(--green2)"></small></div>
+    </div>
+    <div style="height:.5rem"></div>
+    <div class="upload-zone" id="drop-575"
+      ondragover="event.preventDefault();this.classList.add('drag-over')"
+      ondragleave="this.classList.remove('drag-over')"
+      ondrop="handleDrop(event,'575')" onclick="document.getElementById('file-575').click()">
+      <input type="file" id="file-575" accept=".csv,.CSV,.txt,.TXT" onchange="handleFile(this,'575')"/>
+      <div class="uz-icon">📄</div>
+      <div class="uz-text"><strong>Archivo 575</strong> (SKCLI575)<br><small id="name-575" style="color:var(--green2)"></small></div>
+    </div>
+    <div class="prog-bar"><div class="prog-fill" id="prog-fill"></div></div>
+    <div id="upload-msg" style="font-size:.75rem;margin-top:.5rem;min-height:1rem;"></div>
+    <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:.9rem;">
+      <button class="btn btn-ghost btn-sm" onclick="cerrarUpload()">Cancelar</button>
+      <button class="btn btn-sm" onclick="subirArchivos()">Subir y Recargar</button>
+    </div>
+  </div>
 </div>
 
+<!-- TOOLBAR -->
 <div class="toolbar">
-  <div><label>Fecha</label><select id="sel-fecha" onchange="cargarTodo()"><option value="">Cargando...</option></select></div>
-  <div><label>Fecha anterior (variaciones)</label><select id="sel-fecha-ant"><option value="">— ninguna —</option></select></div>
-  <div><label>Umbral variación %</label><input type="number" id="umbral" value="5" min="0" step="0.5" style="width:80px;"/></div>
-  <button class="btn" onclick="cargarTodo()">🔄 Actualizar</button>
+  <div class="tb-group">
+    <label>Fecha</label>
+    <select id="sel-fecha" onchange="cargarTodo()"></select>
+  </div>
+  <div class="tb-group">
+    <label>Portafolio</label>
+    <select id="fil-portafolio" onchange="cargarPosiciones()"><option value="">Todos</option></select>
+  </div>
+  <div class="tb-group">
+    <label>Moneda</label>
+    <select id="fil-moneda" onchange="cargarPosiciones()"><option value="">Todas</option></select>
+  </div>
+  <div class="tb-group">
+    <label>Buscar</label>
+    <input type="text" id="fil-busqueda" placeholder="ISIN / especie / nemo..." oninput="debounce(cargarPosiciones,380)()" style="width:200px;"/>
+  </div>
+  <label style="display:flex;align-items:center;gap:.3rem;cursor:pointer;font-size:.75rem;color:var(--muted2);padding-bottom:1px;">
+    <input type="checkbox" id="solo-alertas" onchange="cargarPosiciones()"> Solo alertas
+  </label>
+  <button class="btn btn-ghost btn-sm" onclick="cargarTodo()">↺ Actualizar</button>
 </div>
 
-<div class="content">
-  <!-- KPIs -->
-  <div class="kpi-row">
-    <div class="kpi"><div class="label">Total Posiciones</div><div class="val" id="kpi-total">—</div><div class="sub">en el 596</div></div>
-    <div class="kpi"><div class="label">Val. Hoy (COP)</div><div class="val ok" id="kpi-val-hoy">—</div><div class="sub">suma cartera</div></div>
-    <div class="kpi"><div class="label">Val. Anterior</div><div class="val" id="kpi-val-ant">—</div><div class="sub">día anterior</div></div>
-    <div class="kpi"><div class="label">Alertas Variación</div><div class="val err" id="kpi-alertas-var">—</div><div class="sub">&gt;5% cambio val.</div></div>
-    <div class="kpi"><div class="label">Errores Detectados</div><div class="val err" id="kpi-errores">—</div><div class="sub">sin precio, nulos…</div></div>
+<!-- KPIs -->
+<div class="kpi-band">
+  <div class="kpi blue">
+    <div class="kpi-label">Posiciones 596</div>
+    <div class="kpi-value" id="kpi-total">—</div>
+    <div class="kpi-sub" id="kpi-archivo-596">archivo</div>
   </div>
+  <div class="kpi ok">
+    <div class="kpi-label">Con precio</div>
+    <div class="kpi-value" id="kpi-con-precio">—</div>
+    <div class="kpi-sub">valorados</div>
+  </div>
+  <div class="kpi err">
+    <div class="kpi-label">Sin precio</div>
+    <div class="kpi-value" id="kpi-sin-precio">—</div>
+    <div class="kpi-sub">requieren atención</div>
+  </div>
+  <div class="kpi purple">
+    <div class="kpi-label">Vlr Mercado Total</div>
+    <div class="kpi-value" id="kpi-vlr-total">—</div>
+    <div class="kpi-sub">COP — 596</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Causación Mercado</div>
+    <div class="kpi-value" id="kpi-causacion">—</div>
+    <div class="kpi-sub" id="kpi-archivo-575">575 — total día</div>
+  </div>
+  <div class="kpi yellow">
+    <div class="kpi-label">Observaciones</div>
+    <div class="kpi-value" id="kpi-obs">—</div>
+    <div class="kpi-sub">anotaciones manuales</div>
+  </div>
+</div>
 
-  <!-- GRÁFICAS -->
-  <div class="grid-2">
+<!-- TAB BAR -->
+<div class="tab-bar">
+  <div class="tab active" onclick="showTab('tab-596',this)">📋 Posiciones 596</div>
+  <div class="tab" onclick="showTab('tab-causaciones',this)">📈 Causaciones 575</div>
+  <div class="tab" onclick="showTab('tab-fondos',this)">🏦 Fondos</div>
+  <div class="tab" onclick="showTab('tab-tir',this)">⚠ TIR/DV
+    <span class="tab-badge" id="tir-badge" style="display:none;"></span>
+  </div>
+  <div class="tab" onclick="showTab('tab-errores',this)">🚨 Errores</div>
+  <div class="tab" onclick="showTab('tab-portafolios',this)">💼 Portafolios</div>
+  <div class="tab" onclick="showTab('tab-monedas',this)">💱 Monedas</div>
+</div>
+
+<!-- ALERTAS BANNER -->
+<div style="padding:.5rem 1.25rem 0;" id="alertas-banner-wrap"></div>
+
+<!-- ── TAB: POSICIONES 596 ── -->
+<div class="tab-panel active" id="tab-596">
+  <div class="chart-grid-3" id="charts-resumen">
     <div class="card">
-      <div class="card-title">🗂 Distribución por Tipo de Activo</div>
-      <div id="chart-tipos" style="height:260px;"></div>
+      <div class="card-title">Distribución por especie <span class="badge-cnt" id="cnt-especie">0</span></div>
+      <div id="chart-especie" style="height:220px;"></div>
     </div>
     <div class="card">
-      <div class="card-title">⚠️ Top Alertas de Variación</div>
-      <div id="chart-alertas" style="height:260px;"></div>
+      <div class="card-title">Por portafolio</div>
+      <div id="chart-portafolio" style="height:220px;"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Por moneda</div>
+      <div id="chart-moneda" style="height:220px;"></div>
     </div>
   </div>
+  <div class="filter-bar">
+    <span id="count-596" style="color:var(--muted);font-size:.75rem;"></span>
+    <button class="btn btn-warn btn-sm" onclick="toggleSoloAlertas()">⚠ Solo sin precio</button>
+    <span style="color:var(--muted);font-size:.72rem;margin-left:.25rem;">Haz clic en OBS → agrega texto → Enter o ✓</span>
+  </div>
+  <div class="table-wrap" id="wrap-596"><div class="empty"><span class="spinner"></span></div></div>
+</div>
 
-  <!-- TABS -->
-  <div class="card">
-    <div class="tabs">
-      <div class="tab active" onclick="showTab('tab-posiciones',this)">Posiciones 596</div>
-      <div class="tab" onclick="showTab('tab-errores',this)">Errores y Alertas</div>
-      <div class="tab" onclick="showTab('tab-causaciones',this)">Causaciones 575</div>
-      <div class="tab" onclick="showTab('tab-variaciones',this)">Variaciones</div>
+<!-- ── TAB: CAUSACIONES 575 ── -->
+<div class="tab-panel" id="tab-causaciones">
+  <div class="chart-grid-2">
+    <div class="card">
+      <div class="card-title">Causación Mercado vs TIR</div>
+      <div id="chart-causacion" style="height:200px;"></div>
     </div>
-
-    <!-- Posiciones -->
-    <div class="tab-panel active" id="tab-posiciones">
-      <div class="filters">
-        <input type="text" id="bus-pos" placeholder="Buscar ISIN/NEMO..." oninput="cargarPosiciones()"/>
-        <select id="fil-tipo" onchange="cargarPosiciones()"><option value="">Todos los tipos</option></select>
-        <label><input type="checkbox" id="chk-alertas" onchange="cargarPosiciones()"> Solo alertas</label>
-      </div>
-      <div class="table-wrap" id="wrap-posiciones"><div class="empty"><span class="spinner"></span></div></div>
-    </div>
-
-    <!-- Errores -->
-    <div class="tab-panel" id="tab-errores">
-      <div class="filters">
-        <select id="fil-sev"><option value="">Todas las severidades</option><option value="ALTO">ALTO</option><option value="MEDIO">MEDIO</option><option value="BAJO">BAJO</option></select>
-        <input type="text" id="bus-err" placeholder="Filtrar..." oninput="filtrarErrores()"/>
-      </div>
-      <div class="table-wrap" id="wrap-errores"><div class="empty"><span class="spinner"></span></div></div>
-    </div>
-
-    <!-- Causaciones -->
-    <div class="tab-panel" id="tab-causaciones">
-      <div id="resumen-causaciones" style="margin-bottom:1rem;"></div>
-      <div class="table-wrap" id="wrap-causaciones"><div class="empty"><span class="spinner"></span></div></div>
-    </div>
-
-    <!-- Variaciones -->
-    <div class="tab-panel" id="tab-variaciones">
-      <p style="color:var(--muted);font-size:.85rem;margin-bottom:1rem;">Variaciones de valoración entre dos fechas.</p>
-      <div class="table-wrap" id="wrap-var-porfin"><div class="empty">Selecciona dos fechas en la barra superior</div></div>
+    <div class="card">
+      <div class="card-title">Errores por tipo</div>
+      <div id="chart-errores" style="height:200px;"></div>
     </div>
   </div>
+  <div class="pills" id="pills-causacion"></div>
+  <div class="filter-bar">
+    <input type="text" id="fil-busq-575" placeholder="Especie / ISIN..." oninput="debounce(renderCausaciones,380)()" style="width:200px;"/>
+    <label style="display:flex;align-items:center;gap:.3rem;cursor:pointer;font-size:.75rem;color:var(--muted2);">
+      <input type="checkbox" id="solo-alertas-575" onchange="renderCausaciones()"> Solo alertas
+    </label>
+    <span id="count-575" style="color:var(--muted);font-size:.75rem;"></span>
+  </div>
+  <div class="table-wrap" id="wrap-causaciones"><div class="empty"><span class="spinner"></span></div></div>
+</div>
+
+<!-- ── TAB: FONDOS ── -->
+<div class="tab-panel" id="tab-fondos">
+  <div id="kpi-fondos-row" style="display:grid;grid-template-columns:repeat(4,1fr);gap:.5rem;margin-bottom:.75rem;"></div>
+  <div class="chart-grid-2">
+    <div class="card">
+      <div class="card-title">🏦 Fondos por valor mercado (575) — top 15</div>
+      <div id="chart-fondos" style="height:300px;"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">💱 Por moneda (575)</div>
+      <div id="chart-mon-fondos" style="height:300px;"></div>
+    </div>
+  </div>
+  <div class="filter-bar">
+    <input type="text" id="fil-busq-fondo" placeholder="Buscar fondo..." oninput="renderFondos()" style="width:150px;"/>
+    <select id="fil-mon-fondo" onchange="renderFondos()">
+      <option value="">Todas las monedas</option>
+      <option value="COP">COP</option><option value="USD">USD</option>
+      <option value="UVR">UVR</option><option value="EUR">EUR</option><option value="GBP">GBP</option>
+    </select>
+    <label style="display:flex;align-items:center;gap:.3rem;cursor:pointer;font-size:.75rem;color:var(--muted2);">
+      <input type="checkbox" id="solo-alertas-fondo" onchange="renderFondos()"> Solo con alertas
+    </label>
+    <button class="btn btn-ghost btn-sm" onclick="limpiarFondoSeleccionado()">← Volver</button>
+  </div>
+  <div id="wrap-fondos-lista">
+    <div class="table-wrap" id="wrap-fondos"><div class="empty"><span class="spinner"></span></div></div>
+  </div>
+  <div id="wrap-fondo-detalle" style="display:none;">
+    <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.6rem;flex-wrap:wrap;">
+      <h3 id="fondo-detalle-titulo" style="font-size:.9rem;color:var(--blue2);"></h3>
+      <div class="fondo-kpis" id="kpi-fondo-sel"></div>
+    </div>
+    <div class="filter-bar">
+      <select id="fil-mon-detalle" onchange="cargarFondoDetalle()">
+        <option value="">Todas las monedas</option>
+        <option value="COP">COP</option><option value="USD">USD</option>
+        <option value="UVR">UVR</option><option value="EUR">EUR</option><option value="GBP">GBP</option>
+      </select>
+      <label style="display:flex;align-items:center;gap:.3rem;cursor:pointer;font-size:.75rem;color:var(--muted2);">
+        <input type="checkbox" id="solo-alertas-detalle" onchange="cargarFondoDetalle()"> Solo alertas
+      </label>
+    </div>
+    <div class="table-wrap" id="wrap-fondo-detalle-tabla"><div class="empty"><span class="spinner"></span></div></div>
+  </div>
+</div>
+
+<!-- ── TAB: ALERTAS TIR/DV ── -->
+<div class="tab-panel" id="tab-tir">
+  <div class="banner err" style="margin-bottom:.75rem;">
+    ⚠ Títulos valorando a <strong>TIR / curva propia</strong> cuando debería aplicarse precio de mercado.
+    Se excluyen emitidos hoy y DV con vencimiento hoy/mañana. Revisar con valoración antes de aprobar.
+  </div>
+  <div class="subtab-bar">
+    <button class="subtab active" id="btn-tir-596" onclick="showTirTab('596')">Desde 596</button>
+    <button class="subtab" id="btn-tir-575" onclick="showTirTab('575')">Desde 575</button>
+  </div>
+  <div class="pills" id="tir-resumen"></div>
+  <div class="filter-bar">
+    <input type="text" id="fil-busq-tir" placeholder="ISIN / especie..." oninput="renderTir()" style="width:200px;"/>
+    <select id="fil-motivo-tir" onchange="renderTir()">
+      <option value="">Todos los motivos</option>
+      <option value="DV">METODO DV</option>
+      <option value="1DV">FUENTE 1DV</option>
+      <option value="TC">Mét TC</option>
+    </select>
+    <span id="count-tir" style="color:var(--muted);font-size:.75rem;"></span>
+  </div>
+  <div class="table-wrap" id="wrap-tir"><div class="empty"><span class="spinner"></span></div></div>
+  <div style="margin-top:.6rem;padding:.6rem .75rem;background:var(--surface2);border-radius:var(--radius);font-size:.72rem;color:var(--muted);" id="tir-config-info">
+    Cargando configuración de columnas...
+  </div>
+</div>
+
+<!-- ── TAB: ERRORES ── -->
+<div class="tab-panel" id="tab-errores">
+  <div class="filter-bar">
+    <select id="fil-severidad" onchange="renderErrores()">
+      <option value="">Todas las severidades</option>
+      <option value="ALTO">🔴 Alto</option>
+      <option value="MEDIO">🟡 Medio</option>
+      <option value="BAJO">🟢 Bajo</option>
+    </select>
+    <select id="fil-tipo-error" onchange="renderErrores()">
+      <option value="">Todos los tipos</option>
+      <option value="SIN PRECIO">Sin precio</option>
+      <option value="VALORACION NEGATIVA">Valoración negativa</option>
+      <option value="NOMINAL CERO">Nominal cero</option>
+    </select>
+    <input type="text" id="fil-busq-error" placeholder="ISIN / especie..." oninput="renderErrores()" style="width:180px;"/>
+    <span id="count-errores" style="color:var(--muted);font-size:.75rem;"></span>
+  </div>
+  <div class="table-wrap" id="wrap-errores"><div class="empty"><span class="spinner"></span></div></div>
+</div>
+
+<!-- ── TAB: PORTAFOLIOS ── -->
+<div class="tab-panel" id="tab-portafolios">
+  <div class="table-wrap" id="wrap-portafolios"><div class="empty"><span class="spinner"></span></div></div>
+</div>
+
+<!-- ── TAB: MONEDAS ── -->
+<div class="tab-panel" id="tab-monedas">
+  <div class="table-wrap" id="wrap-monedas-596"><div class="empty"><span class="spinner"></span></div></div>
 </div>
 
 <script>
 const API='';
-let _errores=[];
+const PL={
+  paper_bgcolor:'transparent',plot_bgcolor:'transparent',
+  font:{color:'#8b949e',size:10,family:'Inter'},
+  margin:{t:10,b:35,l:50,r:15},
+  legend:{bgcolor:'transparent',font:{size:9}},
+  xaxis:{gridcolor:'#21262d',zerolinecolor:'#30363d'},
+  yaxis:{gridcolor:'#21262d',zerolinecolor:'#30363d'},
+};
 
-function fmt(v,d=2){return v==null?'—':typeof v==='number'?v.toLocaleString('es-CO',{minimumFractionDigits:d,maximumFractionDigits:d}):String(v);}
-function fmtCOP(v){return v==null?'—':'$'+fmt(v,0);}
-function fmtPct(v){if(v==null)return'—';const c=Math.abs(v)>5?'err':Math.abs(v)>2?'warn':'ok';return`<span class="${c}">${v.toFixed(4)}%</span>`;}
-function showTab(id,el){document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));document.getElementById(id).classList.add('active');el.classList.add('active');}
-async function fetchJSON(url){const r=await fetch(API+url);if(!r.ok)throw new Error(r.statusText);return r.json();}
+let _resumen=null,_erroresData=null,_causData=null,_posData=[];
+let _fondosData=null,_tirData596=null,_tirData575=null,_tirActivo='596',_fondoSel=null;
+let _up596=null,_up575=null;
 
+function debounce(fn,ms){let t;return(...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms);};}
+async function fetchJSON(u){const r=await fetch(API+u);if(!r.ok)throw new Error(`${r.status}`);return r.json();}
+function fmt(n,d=0){if(n==null||isNaN(n))return'—';const a=Math.abs(n);if(a>=1e12)return(n/1e12).toFixed(1)+' T';if(a>=1e9)return(n/1e9).toFixed(1)+' MM';if(a>=1e6)return(n/1e6).toFixed(1)+' M';return Number(n).toLocaleString('es-CO',{minimumFractionDigits:d,maximumFractionDigits:d});}
+function fmtN(n,d=6){return n==null||isNaN(n)?'—':Number(n).toFixed(d);}
+function nc(n){return n==null?'':n>=0?'n-pos':'n-neg';}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function setKpi(id,val,cls){const el=document.getElementById(id);if(!el)return;el.textContent=val;if(cls)el.parentElement.className='kpi '+cls;}
+
+// ── TABS ─────────────────────────────────────────────────────────────────────
+function showTab(id,el){
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  el.classList.add('active');
+  if(id==='tab-causaciones'&&_causData&&document.getElementById('wrap-causaciones').innerHTML.includes('spinner'))renderCausaciones();
+  if(id==='tab-fondos'&&!_fondosData)cargarFondos();
+  if(id==='tab-tir'&&!_tirData596)cargarTir();
+  if(id==='tab-errores'&&_erroresData&&document.getElementById('wrap-errores').innerHTML.includes('spinner'))renderErrores();
+  if(id==='tab-portafolios'&&document.getElementById('wrap-portafolios').innerHTML.includes('spinner'))cargarPortafolios();
+  if(id==='tab-monedas'&&document.getElementById('wrap-monedas-596').innerHTML.includes('spinner'))cargarMonedasTab();
+}
+
+// ── UPLOAD ───────────────────────────────────────────────────────────────────
+function abrirUpload(){
+  const f=document.getElementById('sel-fecha').value;
+  if(f)document.getElementById('up-fecha').value=f;
+  document.getElementById('modal-upload').classList.add('open');
+}
+function cerrarUpload(){document.getElementById('modal-upload').classList.remove('open');}
+function handleFile(inp,tipo){const f=inp.files[0];if(!f)return;if(tipo==='596'){_up596=f;document.getElementById('name-596').textContent=f.name;}else{_up575=f;document.getElementById('name-575').textContent=f.name;}}
+function handleDrop(ev,tipo){ev.preventDefault();document.getElementById('drop-'+tipo).classList.remove('drag-over');const f=ev.dataTransfer.files[0];if(!f)return;if(tipo==='596'){_up596=f;document.getElementById('name-596').textContent=f.name;}else{_up575=f;document.getElementById('name-575').textContent=f.name;}}
+async function subirArchivos(){
+  const fecha=document.getElementById('up-fecha').value.trim();
+  const msg=document.getElementById('upload-msg');
+  if(!fecha||!/^\d{8}$/.test(fecha)){msg.innerHTML='<span style="color:var(--red2)">Fecha inválida. Formato: YYYYMMDD</span>';return;}
+  const archivos=[{file:_up596,tipo:'596'},{file:_up575,tipo:'575'}].filter(a=>a.file);
+  if(!archivos.length){msg.innerHTML='<span style="color:var(--red2)">Selecciona al menos un archivo.</span>';return;}
+  const fill=document.getElementById('prog-fill');
+  msg.innerHTML='Subiendo...';let ok=0;
+  for(let i=0;i<archivos.length;i++){
+    fill.style.width=Math.round((i/archivos.length)*100)+'%';
+    const fd=new FormData();fd.append('fecha',fecha);fd.append('file',archivos[i].file);
+    try{const r=await fetch('/api/upload/porfin',{method:'POST',body:fd});const j=await r.json();if(j.ok)ok++;else msg.innerHTML+=`<br>Error ${archivos[i].tipo}: ${j.detail||'?'}`;}
+    catch(e){msg.innerHTML+=`<br>Error: ${e.message}`;}
+  }
+  fill.style.width='100%';
+  if(ok>0){msg.innerHTML=`<span style="color:var(--green2)">✓ ${ok} archivo(s) subido(s).</span>`;setTimeout(()=>{cerrarUpload();cargarFechas();},1200);}
+}
+
+// ── CARGA PRINCIPAL ───────────────────────────────────────────────────────────
 async function cargarFechas(){
   const sel=document.getElementById('sel-fecha');
-  const selAnt=document.getElementById('sel-fecha-ant');
   try{
-    const data=await fetchJSON('/api/porfin/fechas');
-    const f=(data.fechas||[]).reverse();
-    sel.innerHTML=f.map(x=>`<option value="${x}">${x.slice(0,4)}-${x.slice(4,6)}-${x.slice(6)}</option>`).join('');
-    selAnt.innerHTML='<option value="">— ninguna —</option>'+f.map(x=>`<option value="${x}">${x.slice(0,4)}-${x.slice(4,6)}-${x.slice(6)}</option>`).join('');
-    if(f.length>1)selAnt.value=f[1];
-    if(f.length)cargarTodo();
-  }catch(e){sel.innerHTML='<option>Error</option>';}
+    const d=await fetchJSON('/api/porfin/fechas');
+    const fechas=(d.fechas||[]).slice().reverse();
+    sel.innerHTML=fechas.map(f=>`<option value="${f}">${f.slice(0,4)}-${f.slice(4,6)}-${f.slice(6)}</option>`).join('');
+    if(fechas.length)cargarTodo();
+  }catch(e){sel.innerHTML='<option value="">Error</option>';}
 }
 
 async function cargarTodo(){
   const fecha=document.getElementById('sel-fecha').value;
   if(!fecha)return;
-  await Promise.all([cargarResumen(fecha),cargarPosiciones(),cargarErrores(fecha),cargarCausaciones(fecha),cargarVariaciones()]);
+  _fondosData=null;_tirData596=null;_tirData575=null;_fondoSel=null;
+  ['wrap-causaciones','wrap-errores','wrap-portafolios','wrap-monedas-596','wrap-fondos','wrap-tir']
+    .forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML='<div class="empty"><span class="spinner"></span></div>';});
+  document.getElementById('wrap-fondo-detalle').style.display='none';
+  document.getElementById('wrap-fondos-lista').style.display='block';
+  await Promise.all([cargarResumen(fecha),cargarPosiciones()]);
+  cargarTirBadge(fecha);
 }
 
 async function cargarResumen(fecha){
   try{
-    const d=await fetchJSON(`/api/porfin/resumen/${fecha}`);
-    document.getElementById('kpi-total').textContent=d.total_posiciones??'—';
-    document.getElementById('kpi-val-hoy').textContent=fmtCOP(d.suma_valoracion_hoy);
-    document.getElementById('kpi-val-ant').textContent=fmtCOP(d.suma_valoracion_ant);
-    document.getElementById('kpi-alertas-var').textContent=d.total_alertas??0;
-    document.getElementById('kpi-alertas-var').className='val '+(d.total_alertas>0?'err':'ok');
-
-    if(d.distribucion_tipo&&Object.keys(d.distribucion_tipo).length){
-      const tipos=Object.entries(d.distribucion_tipo).sort((a,b)=>b[1]-a[1]);
-      const colors=['#3fb950','#58a6ff','#f0883e','#bc8cff','#e3b341','#f85149','#79c0ff','#56d364'];
-      Plotly.newPlot('chart-tipos',[{type:'pie',labels:tipos.map(t=>t[0]),values:tipos.map(t=>t[1]),
-        marker:{colors:colors},textinfo:'label+percent',hole:.35}],
-        {paper_bgcolor:'transparent',plot_bgcolor:'transparent',font:{color:'#e6edf3',size:11},
-         legend:{bgcolor:'transparent'},margin:{t:10,b:10,l:10,r:10}},{responsive:true,displayModeBar:false});
+    _resumen=await fetchJSON(`/api/porfin/resumen/${fecha}`);
+    if(_resumen.error){
+      document.getElementById('alertas-banner-wrap').innerHTML=`<div class="banner err">⚠ ${_resumen.error}</div>`;
+      return;
     }
+    const total=_resumen.total_posiciones||0,sinP=_resumen.sin_precio||0,conP=total-sinP;
+    setKpi('kpi-total',fmt(total),'blue');
+    document.getElementById('kpi-archivo-596').textContent=_resumen.archivo_596||'596';
+    document.getElementById('kpi-archivo-575').textContent=_resumen.archivo_575||'575 — total día';
+    setKpi('kpi-con-precio',fmt(conP),conP===total?'ok':conP>total*.7?'warn':'err');
+    setKpi('kpi-sin-precio',fmt(sinP),sinP===0?'ok':sinP<100?'warn':'err');
+    setKpi('kpi-vlr-total',fmt(_resumen.valor_mercado_total),'purple');
+    setKpi('kpi-causacion',fmt(_resumen.causacion_mercado_total),'');
 
-    if(d.alertas_variacion&&d.alertas_variacion.length){
-      const top=d.alertas_variacion.slice(0,12);
-      Plotly.newPlot('chart-alertas',[{type:'bar',x:top.map(r=>r.ISIN||r.NEMO||''),y:top.map(r=>parseFloat(r.VAR_PCT)||0),
-        marker:{color:'#f85149'},text:top.map(r=>(r.VAR_PCT||0).toFixed(2)+'%'),textposition:'auto'}],
-        {paper_bgcolor:'transparent',plot_bgcolor:'transparent',font:{color:'#e6edf3',size:10},
-         margin:{t:10,b:60,l:50,r:10},xaxis:{tickangle:-45,gridcolor:'#30363d'},yaxis:{ticksuffix:'%',gridcolor:'#30363d'}},{responsive:true,displayModeBar:false});
+    document.getElementById('alertas-banner-wrap').innerHTML=sinP>0
+      ?`<div class="banner warn">⚠ <strong>${sinP.toLocaleString()}</strong> posiciones sin precio. Revisar proveedores Infovalmer.</div>`
+      :`<div class="banner ok">✓ Todas las posiciones tienen precio cargado.</div>`;
+
+    // Gráficas resumen
+    const esp=_resumen.distribucion_especie||{};
+    document.getElementById('cnt-especie').textContent=Object.keys(esp).length;
+    if(Object.keys(esp).length){
+      const k=Object.keys(esp).slice(0,12).reverse(),v=k.map(x=>esp[x]);
+      Plotly.newPlot('chart-especie',[{type:'bar',orientation:'h',x:v,y:k,marker:{color:'#1f6feb'}}],
+        {...PL,margin:{t:5,b:20,l:110,r:20}},{responsive:true,displayModeBar:false});
     }
-
-    // Poblar filtro tipos
-    const filTipo=document.getElementById('fil-tipo');
-    filTipo.innerHTML='<option value="">Todos los tipos</option>'+Object.keys(d.distribucion_tipo||{}).map(t=>`<option value="${t}">${t}</option>`).join('');
-  }catch(e){console.error(e);}
+    const port=_resumen.distribucion_portafolio||{};
+    if(Object.keys(port).length){
+      Plotly.newPlot('chart-portafolio',[{type:'pie',labels:Object.keys(port),values:Object.values(port),hole:.4,
+        marker:{colors:['#1f6feb','#3fb950','#e3b341','#f85149','#bc8cff','#58a6ff','#f0883e']},textinfo:'label+percent'}],
+        {...PL,margin:{t:5,b:5,l:5,r:5}},{responsive:true,displayModeBar:false});
+      const selP=document.getElementById('fil-portafolio'),prev=selP.value;
+      selP.innerHTML='<option value="">Todos</option>'+Object.keys(port).map(p=>`<option value="${p}">${p}</option>`).join('');
+      if(prev)selP.value=prev;
+    }
+    const mon=_resumen.distribucion_moneda||{};
+    if(Object.keys(mon).length){
+      Plotly.newPlot('chart-moneda',[{type:'pie',labels:Object.keys(mon),values:Object.values(mon),hole:.4,
+        marker:{colors:['#3fb950','#58a6ff','#e3b341','#f85149','#bc8cff']},textinfo:'label+percent'}],
+        {...PL,margin:{t:5,b:5,l:5,r:5}},{responsive:true,displayModeBar:false});
+      const selM=document.getElementById('fil-moneda'),prev=selM.value;
+      selM.innerHTML='<option value="">Todas</option>'+Object.keys(mon).map(m=>`<option value="${m}">${m}</option>`).join('');
+      if(prev)selM.value=prev;
+    }
+  }catch(e){console.error('resumen',e);}
+  cargarErroresGrafica(fecha);
+  cargarCausacionesGrafica(fecha);
 }
 
+async function cargarErroresGrafica(fecha){
+  try{
+    _erroresData=await fetchJSON(`/api/porfin/errores/${fecha}`);
+    const rt=_erroresData.resumen_tipo||{};
+    if(Object.keys(rt).length){
+      Plotly.newPlot('chart-errores',[{type:'bar',x:Object.keys(rt),y:Object.values(rt),
+        marker:{color:['#f85149','#f0883e','#e3b341','#8b949e']}}],
+        {...PL},{responsive:true,displayModeBar:false});
+    }
+  }catch(e){}
+}
+
+async function cargarCausacionesGrafica(fecha){
+  try{
+    _causData=await fetchJSON(`/api/porfin/causaciones/${fecha}`);
+    const cm=_causData.causacion_mercado_total,ct=_causData.causacion_tir_total;
+    if(cm!=null&&ct!=null){
+      Plotly.newPlot('chart-causacion',[
+        {type:'bar',name:'Mer',x:['Causación'],y:[cm],marker:{color:'#3fb950'}},
+        {type:'bar',name:'TIR',x:['Causación'],y:[ct],marker:{color:'#58a6ff'}},
+      ],{...PL,barmode:'group'},{responsive:true,displayModeBar:false});
+    }
+    document.getElementById('pills-causacion').innerHTML=[
+      ['Mer Total',fmt(cm),'green'],['TIR Total',fmt(ct),'blue'],
+      ['Dif Mer-TIR',fmt(_causData.diferencia_mer_tir),'yellow'],
+      ['Vlr Hoy',fmt(_causData.vlr_mercado_hoy),'purple'],
+      ['Delta',fmt(_causData.delta_valoracion),'orange'],
+    ].map(([l,v,c])=>`<span class="pill ${c}"><span>${l}</span><strong>${v}</strong></span>`).join('');
+    if(document.getElementById('tab-causaciones').classList.contains('active'))renderCausaciones();
+  }catch(e){}
+}
+
+// ── POSICIONES 596 ────────────────────────────────────────────────────────────
 async function cargarPosiciones(){
   const fecha=document.getElementById('sel-fecha').value;
-  const bus=document.getElementById('bus-pos').value;
-  const tipo=document.getElementById('fil-tipo').value;
-  const soloAlertas=document.getElementById('chk-alertas').checked;
-  const wrap=document.getElementById('wrap-posiciones');
+  if(!fecha)return;
+  const params=new URLSearchParams();
+  const b=document.getElementById('fil-busqueda').value;
+  const m=document.getElementById('fil-moneda').value;
+  const p=document.getElementById('fil-portafolio').value;
+  const a=document.getElementById('solo-alertas').checked;
+  if(b)params.set('busqueda',b);if(m)params.set('moneda',m);if(p)params.set('portafolio',p);
+  if(a)params.set('solo_alertas','true');params.set('limit','3000');
+  const wrap=document.getElementById('wrap-596');
   wrap.innerHTML='<div class="empty"><span class="spinner"></span></div>';
   try{
-    let url=`/api/porfin/posiciones/${fecha}?solo_alertas=${soloAlertas}`;
-    if(bus)url+=`&busqueda=${encodeURIComponent(bus)}`;
-    if(tipo)url+=`&tipo=${encodeURIComponent(tipo)}`;
-    const data=await fetchJSON(url);
-    if(!data.length){wrap.innerHTML='<div class="empty">Sin posiciones</div>';return;}
-    const cols=Object.keys(data[0]);
-    let html=`<table><thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>`;
-    data.forEach(r=>{
-      const alerta=r.OBSERVACION&&r.OBSERVACION!=='OK';
-      html+=`<tr style="${alerta?'background:#f8514908;':''}">${cols.map(c=>{
-        const v=r[c];
-        if(c==='OBSERVACION')return`<td><span class="badge ${v==='OK'?'badge-green':'badge-red'}">${v}</span></td>`;
-        if(typeof v==='number')return`<td>${fmt(v,4)}</td>`;
-        return`<td>${v??'—'}</td>`;
-      }).join('')}</tr>`;
-    });
-    html+='</tbody></table>';
-    wrap.innerHTML=html;
+    _posData=await fetchJSON(`/api/porfin/posiciones/${fecha}?${params}`);
+    render596(_posData);
+    document.getElementById('count-596').textContent=`${_posData.length} registros`;
+    document.getElementById('kpi-obs').textContent=_posData.filter(r=>r.OBS).length;
   }catch(e){wrap.innerHTML=`<div class="empty">Error: ${e.message}</div>`;}
 }
 
-async function cargarErrores(fecha){
-  const wrap=document.getElementById('wrap-errores');
-  wrap.innerHTML='<div class="empty"><span class="spinner"></span></div>';
-  try{
-    const data=await fetchJSON(`/api/porfin/errores/${fecha}`);
-    document.getElementById('kpi-errores').textContent=data.total_errores??0;
-    document.getElementById('kpi-errores').className='val '+(data.total_errores>0?'err':'ok');
-    _errores=data.errores||[];
-    filtrarErrores();
-  }catch(e){wrap.innerHTML=`<div class="empty">Error: ${e.message}</div>`;}
-}
-
-function filtrarErrores(){
-  const sev=document.getElementById('fil-sev').value;
-  const bus=document.getElementById('bus-err').value.toUpperCase();
-  let data=_errores;
-  if(sev)data=data.filter(r=>r.severidad===sev);
-  if(bus)data=data.filter(r=>Object.values(r).some(v=>String(v).toUpperCase().includes(bus)));
-  if(!data.length){document.getElementById('wrap-errores').innerHTML='<div class="empty">Sin errores con ese filtro</div>';return;}
-  let html=`<table><thead><tr><th>Tipo Error</th><th>ISIN</th><th>NEMO</th><th>Tipo Activo</th><th>Detalle</th><th>Severidad</th></tr></thead><tbody>`;
-  data.forEach(r=>{
-    html+=`<tr><td><strong>${r.tipo_error}</strong></td><td>${r.isin||'—'}</td><td>${r.nemo||'—'}</td><td>${r.tipo_activo||'—'}</td>
-    <td style="max-width:280px;white-space:normal;">${r.detalle}</td>
-    <td><span class="sev-${r.severidad}">${r.severidad}</span></td></tr>`;
-  });
+function render596(rows){
+  const wrap=document.getElementById('wrap-596');
+  if(!rows.length){wrap.innerHTML='<div class="empty">Sin posiciones para los filtros aplicados</div>';return;}
+  const cols=['CLASE','ESPECIE','TITULO','ISIN','NEMO','EMISION','VCTO','NOMINAL','MONEDA','VLR_MERCADO','PRECIO','TIR','TASA_MER','DURACION','PORTAFOLIO','LLAVE','PUC'];
+  const avail=cols.filter(c=>rows[0].hasOwnProperty(c));
+  let html=`<table><thead><tr>${avail.map(c=>`<th>${c}</th>`).join('')}<th>OBS</th></tr></thead><tbody>`;
+  for(const r of rows){
+    const isA=r.ALERTA===true,hasO=r.OBS&&r.OBS.trim();
+    html+=`<tr class="${isA?'alert-row':hasO?'obs-row':''}">`;
+    for(const c of avail){
+      const v=r[c];
+      if(v==null||v===false){html+=`<td>—</td>`;continue;}
+      if(['VLR_MERCADO','VLR_MER_OR','NOMINAL'].includes(c))html+=`<td class="${nc(v)}">${fmt(v,2)}</td>`;
+      else if(['PRECIO','TIR','TASA_MER','DURACION'].includes(c))html+=`<td class="n-pos">${fmtN(v,6)}</td>`;
+      else html+=`<td>${String(v).trim()}</td>`;
+    }
+    const rid=r._ROW_ID!=null?r._ROW_ID:'';const ov=r.OBS||'';
+    html+=`<td><div class="obs-cell">
+      <input class="obs-input ${ov?'has-obs':''}" id="obs-${rid}" value="${esc(ov)}" placeholder="obs..." data-row="${rid}" data-modulo="porfin596"/>
+      <button class="obs-btn" onclick="guardarObs('${rid}','porfin596')" title="Guardar">✓</button>
+    </div></td></tr>`;
+  }
   html+='</tbody></table>';
-  document.getElementById('wrap-errores').innerHTML=html;
+  wrap.innerHTML=html;
+  wrap.querySelectorAll('.obs-input').forEach(inp=>{
+    inp.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();guardarObs(inp.dataset.row,inp.dataset.modulo);}});
+  });
 }
 
-async function cargarCausaciones(fecha){
+// ── OBSERVACIONES ─────────────────────────────────────────────────────────────
+async function guardarObs(rowId,modulo){
+  const fecha=document.getElementById('sel-fecha').value;
+  const inp=document.getElementById('obs-'+rowId);
+  if(!inp)return;
+  const obs=inp.value.trim();
+  try{
+    const r=await fetch(`/api/porfin/observaciones/${fecha}`,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({fila:String(rowId),obs,modulo})});
+    const j=await r.json();
+    if(j.ok){
+      inp.classList.toggle('has-obs',!!obs);
+      inp.closest('tr').className=obs?'obs-row':'';
+      inp.style.borderBottomColor='var(--green2)';
+      setTimeout(()=>{inp.style.borderBottomColor='';},700);
+      document.getElementById('kpi-obs').textContent=_posData.filter(r=>r.OBS).length;
+    }
+  }catch(e){}
+}
+
+// ── CAUSACIONES 575 ────────────────────────────────────────────────────────────
+function renderCausaciones(){
+  if(!_causData||!_causData.detalle)return;
+  const busq=(document.getElementById('fil-busq-575').value||'').toUpperCase();
+  const soloA=document.getElementById('solo-alertas-575').checked;
+  let rows=_causData.detalle||[];
+  if(busq)rows=rows.filter(r=>['ESPECIE','TITULO','ISIN'].some(c=>r[c]&&String(r[c]).toUpperCase().includes(busq)));
+  if(soloA)rows=rows.filter(r=>r.DIF_MER_TIR!=null&&Math.abs(r.DIF_MER_TIR)>1);
+  document.getElementById('count-575').textContent=`${rows.length} registros`;
   const wrap=document.getElementById('wrap-causaciones');
-  wrap.innerHTML='<div class="empty"><span class="spinner"></span></div>';
+  if(!rows.length){wrap.innerHTML='<div class="empty">Sin registros</div>';return;}
+  const cols=['ESPECIE','TITULO','ISIN','VCTO','NOMINAL','VLR_MER_ANT','VLR_MER_HOY','CAUSACION_MER','CAUSACION_TIR','DIF_MER_TIR','PRECIO','TIR','MONEDA','PORTAFOLIO'];
+  const avail=cols.filter(c=>rows[0].hasOwnProperty(c));
+  let html=`<table><thead><tr>${avail.map(c=>`<th>${c}</th>`).join('')}<th>OBS</th></tr></thead><tbody>`;
+  for(const r of rows){
+    const dif=r.DIF_MER_TIR,isA=dif!=null&&Math.abs(dif)>1,hasO=r.OBS&&r.OBS.trim();
+    html+=`<tr class="${isA?'alert-row':hasO?'obs-row':''}">`;
+    for(const c of avail){
+      const v=r[c];if(v==null){html+=`<td>—</td>`;continue;}
+      if(['VLR_MER_ANT','VLR_MER_HOY','CAUSACION_MER','CAUSACION_TIR','DIF_MER_TIR','NOMINAL'].includes(c))html+=`<td class="${nc(v)}">${fmt(v,2)}</td>`;
+      else if(['PRECIO','TIR'].includes(c))html+=`<td>${fmtN(v,6)}</td>`;
+      else html+=`<td>${String(v).trim()}</td>`;
+    }
+    const rid=r._ROW_ID!=null?r._ROW_ID:'';const ov=r.OBS||'';
+    html+=`<td><div class="obs-cell">
+      <input class="obs-input ${ov?'has-obs':''}" id="obs575-${rid}" value="${esc(ov)}" placeholder="obs..." data-row="${rid}" data-modulo="porfin575"/>
+      <button class="obs-btn" onclick="guardarObs575('${rid}')" title="✓">✓</button>
+    </div></td></tr>`;
+  }
+  html+='</tbody></table>';
+  wrap.innerHTML=html;
+  wrap.querySelectorAll('.obs-input').forEach(inp=>{
+    inp.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();guardarObs575(inp.dataset.row);}});
+  });
+}
+
+async function guardarObs575(rowId){
+  const fecha=document.getElementById('sel-fecha').value;
+  const inp=document.getElementById('obs575-'+rowId);
+  if(!inp)return;
+  const obs=inp.value.trim();
   try{
-    const data=await fetchJSON(`/api/porfin/causaciones/${fecha}`);
-    if(data.error){wrap.innerHTML=`<div class="empty">${data.error}</div>`;return;}
-    document.getElementById('resumen-causaciones').innerHTML=`
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem;margin-bottom:1rem;">
-        <div style="background:var(--surface2);padding:.75rem 1rem;border-radius:8px;"><div style="color:var(--muted);font-size:.75rem;text-transform:uppercase;">Registros</div><div style="font-size:1.3rem;font-weight:700;">${data.total_registros}</div></div>
-        <div style="background:var(--surface2);padding:.75rem 1rem;border-radius:8px;"><div style="color:var(--muted);font-size:.75rem;text-transform:uppercase;">Suma Causación</div><div style="font-size:1.3rem;font-weight:700;">${fmtCOP(data.suma_causacion)}</div></div>
-        <div style="background:var(--surface2);padding:.75rem 1rem;border-radius:8px;"><div style="color:var(--muted);font-size:.75rem;text-transform:uppercase;">Alertas</div><div style="font-size:1.3rem;font-weight:700;color:${data.total_alertas>0?'var(--red)':'var(--green)'};">${data.total_alertas}</div></div>
-      </div>`;
-    const rows=data.alertas.length?data.alertas:data.detalle||[];
-    if(!rows.length){wrap.innerHTML='<div class="empty">Sin datos de causaciones</div>';return;}
-    const cols=Object.keys(rows[0]);
-    let html=`<table><thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>`;
-    rows.forEach(r=>{
-      html+=`<tr>${cols.map(c=>{const v=r[c];return`<td>${typeof v==='number'?fmt(v,4):v??'—'}</td>`;}).join('')}</tr>`;
-    });
+    const r=await fetch(`/api/porfin/observaciones/${fecha}`,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({fila:String(rowId),obs,modulo:'porfin575'})});
+    const j=await r.json();
+    if(j.ok){inp.classList.toggle('has-obs',!!obs);inp.style.borderBottomColor='var(--green2)';setTimeout(()=>{inp.style.borderBottomColor='';},700);}
+  }catch(e){}
+}
+
+// ── ERRORES ────────────────────────────────────────────────────────────────────
+function renderErrores(){
+  if(!_erroresData)return;
+  let errores=_erroresData.errores||[];
+  const sev=document.getElementById('fil-severidad').value;
+  const tipo=document.getElementById('fil-tipo-error').value;
+  const busq=(document.getElementById('fil-busq-error').value||'').toUpperCase();
+  if(sev)errores=errores.filter(e=>e.severidad===sev);
+  if(tipo)errores=errores.filter(e=>e.tipo===tipo);
+  if(busq)errores=errores.filter(e=>(e.isin+e.especie+e.portafolio).toUpperCase().includes(busq));
+  document.getElementById('count-errores').textContent=`${errores.length} errores`;
+  const wrap=document.getElementById('wrap-errores');
+  if(!errores.length){wrap.innerHTML='<div class="empty" style="color:var(--green2)">✓ Sin errores para los filtros aplicados</div>';return;}
+  const sMap={'ALTO':'badge-red','MEDIO':'badge-yellow','BAJO':'badge-green'};
+  let html='<table><thead><tr><th>Sev.</th><th>Tipo</th><th>ISIN</th><th>Especie</th><th>Portafolio</th><th>Detalle</th></tr></thead><tbody>';
+  for(const e of errores){
+    html+=`<tr class="${e.severidad==='ALTO'?'alert-row':''}">
+      <td><span class="badge ${sMap[e.severidad]||''}">${e.severidad}</span></td>
+      <td>${e.tipo}</td><td>${e.isin||'—'}</td><td>${e.especie||'—'}</td>
+      <td>${e.portafolio||'—'}</td>
+      <td style="color:var(--muted2);max-width:280px;white-space:normal;font-size:.72rem;">${e.detalle}</td>
+    </tr>`;
+  }
+  html+='</tbody></table>';
+  wrap.innerHTML=html;
+}
+
+// ── PORTAFOLIOS ────────────────────────────────────────────────────────────────
+async function cargarPortafolios(){
+  const fecha=document.getElementById('sel-fecha').value;
+  try{
+    const rows=await fetchJSON(`/api/porfin/portafolios/${fecha}`);
+    const wrap=document.getElementById('wrap-portafolios');
+    if(!rows.length){wrap.innerHTML='<div class="empty">Sin datos</div>';return;}
+    const total=rows.reduce((s,r)=>s+(r.valor_mercado||0),0);
+    let html='<table><thead><tr><th>Portafolio</th><th>Posiciones</th><th>Valor Mercado</th><th>%</th></tr></thead><tbody>';
+    for(const r of rows){
+      const pct=total?((r.valor_mercado/total)*100).toFixed(1):'—';
+      html+=`<tr><td><strong>${r.PORTAFOLIO||r.portafolio||'—'}</strong></td><td>${(r.posiciones||0).toLocaleString()}</td>
+        <td class="${nc(r.valor_mercado)}">${fmt(r.valor_mercado,2)}</td>
+        <td style="color:var(--muted)">${pct}%</td></tr>`;
+    }
+    html+=`<tr style="font-weight:700;border-top:2px solid var(--border2);background:var(--surface2);"><td colspan="2">TOTAL</td><td class="${nc(total)}">${fmt(total,2)}</td><td>100%</td></tr>`;
     html+='</tbody></table>';
     wrap.innerHTML=html;
+  }catch(e){document.getElementById('wrap-portafolios').innerHTML=`<div class="empty">Error: ${e.message}</div>`;}
+}
+
+async function cargarMonedasTab(){
+  const fecha=document.getElementById('sel-fecha').value;
+  try{
+    const rows=await fetchJSON(`/api/porfin/monedas/${fecha}`);
+    const wrap=document.getElementById('wrap-monedas-596');
+    if(!rows.length){wrap.innerHTML='<div class="empty">Sin datos</div>';return;}
+    let html='<table><thead><tr><th>Moneda</th><th>Posiciones</th><th>Valor Mercado COP</th></tr></thead><tbody>';
+    for(const r of rows)html+=`<tr><td><strong>${r.MONEDA||'—'}</strong></td><td>${(r.posiciones||0).toLocaleString()}</td><td class="${nc(r.valor_mercado)}">${fmt(r.valor_mercado,2)}</td></tr>`;
+    html+='</tbody></table>';
+    wrap.innerHTML=html;
+  }catch(e){}
+}
+
+// ── FONDOS ────────────────────────────────────────────────────────────────────
+async function cargarFondos(){
+  const fecha=document.getElementById('sel-fecha').value;
+  if(!fecha)return;
+  try{
+    _fondosData=await fetchJSON(`/api/porfin/fondos/${fecha}`);
+    renderFondos();
+    const fondos=(_fondosData.fondos||[]).slice(0,15);
+    if(fondos.length){
+      const names=fondos.map(f=>f.FONDO).reverse();
+      const vals=fondos.map(f=>f.vlr_hoy).reverse();
+      const colors=fondos.map(f=>Math.abs(f.dif_caus||0)>1e6?'#f85149':'#1f6feb').reverse();
+      Plotly.newPlot('chart-fondos',[{
+        type:'bar',orientation:'h',x:vals,y:names,marker:{color:colors},
+        text:fondos.map(f=>fmt(f.vlr_hoy)).reverse(),textposition:'outside',
+      }],{...PL,margin:{t:5,b:25,l:55,r:80},xaxis:{...PL.xaxis,tickformat:',.0s'}},{responsive:true,displayModeBar:false});
+    }
+    document.getElementById('kpi-fondos-row').innerHTML=[
+      ['Total fondos',_fondosData.total_fondos,'var(--blue2)'],
+      ['Vlr Mercado',fmt(_fondosData.total_vlr_mercado),'var(--purple2)'],
+      ['Causación Mer.',fmt(_fondosData.total_causacion_mer),'var(--green2)'],
+      ['Fondos c/alerta',(_fondosData.fondos||[]).filter(f=>Math.abs(f.dif_caus||0)>1e6).length,'var(--red2)'],
+    ].map(([l,v,c])=>`<div style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:.65rem .85rem;">
+      <div style="font-size:.65rem;color:var(--muted);text-transform:uppercase;margin-bottom:.25rem;">${l}</div>
+      <div style="font-size:1.1rem;font-weight:700;color:${c}">${v}</div>
+    </div>`).join('');
+    const monData=await fetchJSON(`/api/porfin/monedas_fondos/${fecha}`);
+    if(monData.length){
+      Plotly.newPlot('chart-mon-fondos',[{type:'pie',labels:monData.map(m=>m.MON_NORM),values:monData.map(m=>Math.abs(m.vlr_hoy)),
+        hole:.4,textinfo:'label+percent',
+        marker:{colors:['#1f6feb','#3fb950','#e3b341','#f85149','#bc8cff','#58a6ff','#f0883e','#8b949e']},
+      }],{...PL,margin:{t:5,b:5,l:5,r:5}},{responsive:true,displayModeBar:false});
+    }
+  }catch(e){document.getElementById('wrap-fondos').innerHTML=`<div class="empty">Error: ${e.message}</div>`;}
+}
+
+function renderFondos(){
+  if(!_fondosData)return;
+  let fondos=_fondosData.fondos||[];
+  const busq=(document.getElementById('fil-busq-fondo').value||'').toUpperCase();
+  const soloAl=document.getElementById('solo-alertas-fondo').checked;
+  if(busq)fondos=fondos.filter(f=>f.FONDO.toUpperCase().includes(busq));
+  if(soloAl)fondos=fondos.filter(f=>Math.abs(f.dif_caus||0)>1e6);
+  const wrap=document.getElementById('wrap-fondos');
+  if(!fondos.length){wrap.innerHTML='<div class="empty">Sin fondos</div>';return;}
+  const totalVlr=fondos.reduce((s,f)=>s+(f.vlr_hoy||0),0);
+  let html=`<table><thead><tr>
+    <th>Fondo</th><th>Portafolios</th><th>Posiciones</th>
+    <th>Vlr Hoy</th><th>%</th><th>Delta Valor</th>
+    <th>Caus Mer</th><th>Caus TIR</th><th>Dif Caus</th><th></th>
+  </tr></thead><tbody>`;
+  for(const f of fondos){
+    const pct=totalVlr?((f.vlr_hoy/totalVlr)*100).toFixed(1):'—';
+    const difAlert=Math.abs(f.dif_caus||0)>1e6;
+    html+=`<tr class="${difAlert?'alert-row':''}">
+      <td><strong style="color:var(--blue2);cursor:pointer;" onclick="seleccionarFondo('${f.FONDO}')">${f.FONDO}</strong></td>
+      <td>${f.portafolios}</td><td>${f.posiciones.toLocaleString()}</td>
+      <td class="${nc(f.vlr_hoy)}">${fmt(f.vlr_hoy,2)}</td>
+      <td style="color:var(--muted)">${pct}%</td>
+      <td class="${nc(f.delta_valor)}">${fmt(f.delta_valor,2)}</td>
+      <td class="${nc(f.caus_mer)}">${fmt(f.caus_mer,2)}</td>
+      <td class="${nc(f.caus_tir)}">${fmt(f.caus_tir,2)}</td>
+      <td class="${difAlert?'n-neg':nc(f.dif_caus)}">${fmt(f.dif_caus,2)}</td>
+      <td><button class="btn btn-ghost btn-sm" onclick="seleccionarFondo('${f.FONDO}')">Ver →</button></td>
+    </tr>`;
+  }
+  const totDelta=fondos.reduce((s,f)=>s+(f.delta_valor||0),0);
+  const totCM=fondos.reduce((s,f)=>s+(f.caus_mer||0),0);
+  const totCT=fondos.reduce((s,f)=>s+(f.caus_tir||0),0);
+  const totDif=fondos.reduce((s,f)=>s+(f.dif_caus||0),0);
+  html+=`<tr style="font-weight:700;border-top:2px solid var(--border2);background:var(--surface2);">
+    <td colspan="3">TOTAL (${fondos.length})</td>
+    <td class="${nc(totalVlr)}">${fmt(totalVlr,2)}</td><td>100%</td>
+    <td class="${nc(totDelta)}">${fmt(totDelta,2)}</td>
+    <td class="${nc(totCM)}">${fmt(totCM,2)}</td>
+    <td class="${nc(totCT)}">${fmt(totCT,2)}</td>
+    <td class="${nc(totDif)}">${fmt(totDif,2)}</td><td></td>
+  </tr>`;
+  html+='</tbody></table>';
+  wrap.innerHTML=html;
+}
+
+function seleccionarFondo(fondo){
+  _fondoSel=fondo;
+  document.getElementById('fondo-detalle-titulo').textContent=`Fondo ${fondo} — detalle`;
+  document.getElementById('wrap-fondos-lista').style.display='none';
+  document.getElementById('wrap-fondo-detalle').style.display='block';
+  cargarFondoDetalle();
+}
+function limpiarFondoSeleccionado(){
+  _fondoSel=null;
+  document.getElementById('wrap-fondos-lista').style.display='block';
+  document.getElementById('wrap-fondo-detalle').style.display='none';
+}
+
+async function cargarFondoDetalle(){
+  if(!_fondoSel)return;
+  const fecha=document.getElementById('sel-fecha').value;
+  const mon=document.getElementById('fil-mon-detalle').value;
+  const soloAl=document.getElementById('solo-alertas-detalle').checked;
+  const wrap=document.getElementById('wrap-fondo-detalle-tabla');
+  wrap.innerHTML='<div class="empty"><span class="spinner"></span></div>';
+  try{
+    const params=new URLSearchParams();
+    if(mon)params.set('moneda',mon);if(soloAl)params.set('solo_alertas','true');
+    const rows=await fetchJSON(`/api/porfin/fondos/${fecha}/${_fondoSel}?${params}`);
+    const vlrTot=rows.reduce((s,r)=>s+(r.VLR_MER_HOY||0),0);
+    const causTot=rows.reduce((s,r)=>s+(r.CAUSACION_MER||0),0);
+    const alertas=rows.filter(r=>r.ALERTA_CAUS).length;
+    document.getElementById('kpi-fondo-sel').innerHTML=[
+      ['Posiciones',rows.length,'var(--blue2)'],['Vlr Hoy',fmt(vlrTot,2),'var(--purple2)'],
+      ['Caus Mer',fmt(causTot,2),'var(--green2)'],['Alertas',alertas,alertas?'var(--red2)':'var(--green2)'],
+    ].map(([l,v,c])=>`<span class="fondo-kpi"><span>${l}: </span><strong style="color:${c}">${v}</strong></span>`).join('');
+    if(!rows.length){wrap.innerHTML='<div class="empty">Sin posiciones</div>';return;}
+    const cols=['PORTAFOLIO','ESPECIE','TITULO','ISIN','VCTO','NOMINAL','MON_NORM','VLR_MER_ANT','VLR_MER_HOY','CAUSACION_MER','CAUSACION_TIR','DIF_MER_TIR','PRECIO','TIR','METODO','ESTADO'];
+    const avail=cols.filter(c=>rows[0].hasOwnProperty(c));
+    let html=`<table><thead><tr>${avail.map(c=>`<th>${c}</th>`).join('')}<th>OBS</th></tr></thead><tbody>`;
+    for(const r of rows){
+      const isA=r.ALERTA_CAUS===true,hasO=r.OBS&&r.OBS.trim();
+      html+=`<tr class="${isA?'alert-row':hasO?'obs-row':''}">`;
+      for(const c of avail){
+        const v=r[c];if(v==null||v===false){html+=`<td>—</td>`;continue;}
+        if(['VLR_MER_ANT','VLR_MER_HOY','CAUSACION_MER','CAUSACION_TIR','DIF_MER_TIR','NOMINAL'].includes(c))html+=`<td class="${nc(v)}">${fmt(v,2)}</td>`;
+        else if(['PRECIO','TIR'].includes(c))html+=`<td>${fmtN(v,6)}</td>`;
+        else html+=`<td>${String(v).trim()}</td>`;
+      }
+      const rid=r._ROW_ID!=null?r._ROW_ID:'';const ov=r.OBS||'';
+      html+=`<td><div class="obs-cell">
+        <input class="obs-input ${ov?'has-obs':''}" id="obs-fd-${rid}" value="${esc(ov)}" placeholder="obs..." data-row="${rid}" data-modulo="porfin575"/>
+        <button class="obs-btn" onclick="guardarObsFondo('${rid}')" title="✓">✓</button>
+      </div></td></tr>`;
+    }
+    html+='</tbody></table>';
+    wrap.innerHTML=html;
+    wrap.querySelectorAll('.obs-input').forEach(inp=>{inp.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();guardarObsFondo(inp.dataset.row);}});});
   }catch(e){wrap.innerHTML=`<div class="empty">Error: ${e.message}</div>`;}
 }
 
-async function cargarVariaciones(){
-  const fechaFin=document.getElementById('sel-fecha').value;
-  const fechaIni=document.getElementById('sel-fecha-ant').value;
-  const umbral=document.getElementById('umbral').value;
-  const wrap=document.getElementById('wrap-var-porfin');
-  if(!fechaIni||!fechaFin||fechaIni===fechaFin){wrap.innerHTML='<div class="empty">Selecciona dos fechas distintas</div>';return;}
-  wrap.innerHTML='<div class="empty"><span class="spinner"></span></div>';
+async function guardarObsFondo(rowId){
+  const fecha=document.getElementById('sel-fecha').value;
+  const inp=document.getElementById('obs-fd-'+rowId);if(!inp)return;
+  const obs=inp.value.trim();
   try{
-    const data=await fetchJSON(`/api/porfin/variaciones/${fechaIni}/${fechaFin}?umbral=${umbral}`);
-    if(!data.length){wrap.innerHTML='<div class="empty">Sin variaciones</div>';return;}
-    let html=`<table><thead><tr><th>ID</th><th>Val. Inicio</th><th>Val. Fin</th><th>VAR ABS</th><th>VAR %</th><th>Estado</th></tr></thead><tbody>`;
-    data.forEach(r=>{
-      html+=`<tr><td><strong>${r.ID}</strong></td><td>${fmtCOP(r.VAL_I)}</td><td>${fmtCOP(r.VAL_F)}</td>
-      <td>${fmtCOP(r.VAR_ABS)}</td><td>${fmtPct(r.VAR_PCT)}</td>
-      <td><span class="badge ${r.ANORMAL?'badge-red':'badge-green'}">${r.ANORMAL?'⚠ ANORMAL':'OK'}</span></td></tr>`;
-    });
-    html+='</tbody></table>';
-    wrap.innerHTML=html;
-  }catch(e){wrap.innerHTML=`<div class="empty">Error: ${e.message}</div>`;}
+    const r=await fetch(`/api/porfin/observaciones/${fecha}`,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({fila:String(rowId),obs,modulo:'porfin575'})});
+    const j=await r.json();
+    if(j.ok){inp.classList.toggle('has-obs',!!obs);inp.style.borderBottomColor='var(--green2)';setTimeout(()=>{inp.style.borderBottomColor='';},700);}
+  }catch(e){}
 }
 
+// ── ALERTAS TIR/DV ────────────────────────────────────────────────────────────
+async function cargarTirBadge(fecha){
+  try{
+    const d=await fetchJSON(`/api/porfin/alertas_tir/${fecha}`);
+    _tirData596=d;
+    const badge=document.getElementById('tir-badge');
+    if(d.total_alertas>0){badge.style.display='inline-block';badge.textContent=d.total_alertas;}
+  }catch(e){}
+}
+
+async function cargarTir(){
+  const fecha=document.getElementById('sel-fecha').value;if(!fecha)return;
+  if(!_tirData596){try{_tirData596=await fetchJSON(`/api/porfin/alertas_tir/${fecha}`);}catch(e){}}
+  try{
+    const cfg=await fetchJSON(`/api/porfin/config_columnas/${fecha}`);
+    document.getElementById('tir-config-info').innerHTML=
+      `<strong>Columnas 596:</strong> METODO="${cfg['596'].col_metodo}" (DV=al vencimiento) | `+
+      `FUENTE_TIT="${cfg['596'].col_fuente}" (1DV=al vencimiento) | `+
+      `Mét="${cfg['596'].col_met_curva}" (TC=Tasa Cupón/TIR implícita) &nbsp;·&nbsp; `+
+      `<strong>575:</strong> METODO="${cfg['575'].col_metodo}" | Mét="${cfg['575'].col_met_curva}"`;
+  }catch(e){}
+  showTirTab('596');
+}
+
+async function showTirTab(archivo){
+  _tirActivo=archivo;
+  document.getElementById('btn-tir-596').className='subtab'+(archivo==='596'?' active':'');
+  document.getElementById('btn-tir-575').className='subtab'+(archivo==='575'?' active':'');
+  const fecha=document.getElementById('sel-fecha').value;
+  if(archivo==='575'&&!_tirData575){
+    try{_tirData575=await fetchJSON(`/api/porfin/alertas_tir_575/${fecha}`);}catch(e){_tirData575={alertas:[]};}
+  }
+  renderTir();
+}
+
+function renderTir(){
+  const data=_tirActivo==='596'?_tirData596:_tirData575;
+  if(!data){document.getElementById('wrap-tir').innerHTML='<div class="empty"><span class="spinner"></span></div>';return;}
+  const busq=(document.getElementById('fil-busq-tir').value||'').toUpperCase();
+  const motFil=document.getElementById('fil-motivo-tir').value.toUpperCase();
+  let alertas=data.alertas||[];
+  if(busq)alertas=alertas.filter(a=>(a.isin+a.especie+(a.portafolio||'')).toUpperCase().includes(busq));
+  if(motFil)alertas=alertas.filter(a=>a.motivo.toUpperCase().includes(motFil));
+  document.getElementById('count-tir').textContent=`${alertas.length} alertas`;
+  const resumen=data.resumen_motivo||{};
+  document.getElementById('tir-resumen').innerHTML=Object.entries(resumen).map(([k,v])=>
+    `<span class="pill red"><span>${k}</span><strong>${v}</strong></span>`).join('');
+  const wrap=document.getElementById('wrap-tir');
+  if(!alertas.length){wrap.innerHTML='<div class="empty" style="color:var(--green2)">✓ Sin títulos valorando a TIR/curva propia.</div>';return;}
+  const cols596=['motivo','isin','especie','emision','vcto','metodo','fuente_tit','met_curva','precio','tir','portafolio','nominal','vlr_mercado'];
+  const cols575=['motivo','isin','especie','metodo','met_curva','precio','tir','vlr_mer_hoy','causacion_mer','portafolio'];
+  const cols=_tirActivo==='596'?cols596:cols575;
+  const avail=cols.filter(c=>alertas[0].hasOwnProperty(c));
+  let html=`<table><thead><tr>${avail.map(c=>`<th>${c.toUpperCase()}</th>`).join('')}</tr></thead><tbody>`;
+  for(const a of alertas){
+    html+=`<tr class="alert-row">`;
+    for(const c of avail){
+      const v=a[c];if(v==null){html+=`<td>—</td>`;continue;}
+      if(c==='motivo')html+=`<td style="white-space:normal;max-width:180px;"><span class="badge badge-red">${v}</span></td>`;
+      else if(['nominal','vlr_mercado','vlr_mer_hoy','causacion_mer'].includes(c))html+=`<td class="${nc(v)}">${fmt(v,2)}</td>`;
+      else if(['precio','tir'].includes(c))html+=`<td>${fmtN(v,6)}</td>`;
+      else html+=`<td>${String(v).trim()}</td>`;
+    }
+    html+='</tr>';
+  }
+  html+='</tbody></table>';
+  wrap.innerHTML=html;
+}
+
+// ── EXPORT ────────────────────────────────────────────────────────────────────
+function descargarExcel(){
+  const fecha=document.getElementById('sel-fecha').value;
+  if(!fecha){alert('Selecciona una fecha.');return;}
+  window.location=`/api/porfin/excel/${fecha}`;
+}
+function exportarCSV(){
+  if(!_posData.length){alert('No hay datos cargados.');return;}
+  const keys=Object.keys(_posData[0]).filter(k=>k!=='_ROW_ID');
+  const csv=[keys.join(','),..._posData.map(r=>keys.map(k=>{const v=r[k];if(v==null)return'';if(typeof v==='string'&&v.includes(','))return`"${v}"`;return v;}).join(','))].join('\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));
+  a.download=`porfin_${document.getElementById('sel-fecha').value}.csv`;a.click();
+}
+function toggleSoloAlertas(){
+  const cb=document.getElementById('solo-alertas');cb.checked=!cb.checked;cargarPosiciones();
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
 cargarFechas();
+document.getElementById('modal-upload').addEventListener('click',e=>{if(e.target===e.currentTarget)cerrarUpload();});
 </script>
 </body>
 </html>
