@@ -15,7 +15,21 @@
   --purple:#6e40c9;--purple2:#bc8cff;--yellow:#9e6a03;--yellow2:#e3b341;
   --accent:#1f6feb;--accent-hover:#388bfd;
   --radius:6px;--radius-lg:10px;
+  --chart-text:#8b949e;--chart-grid:#21262d;
 }
+html[data-theme=light]{
+  --bg:#f0f4f8;--surface:#ffffff;--surface2:#f6f8fa;--surface3:#eaeef2;
+  --border:#d0d7de;--border2:#d0d7de;--text:#1f2328;--muted:#636c76;--muted2:#57606a;
+  --green:#1a7f37;--green2:#1a7f37;--blue:#0969da;--blue2:#0969da;
+  --orange:#bc4c00;--orange2:#bc4c00;--red:#cf222e;--red2:#cf222e;
+  --purple:#8250df;--purple2:#8250df;--yellow:#9a6700;--yellow2:#9a6700;
+  --accent:#0969da;--accent-hover:#0550ae;
+  --chart-text:#1f2328;--chart-grid:#d0d7de;
+}
+/* light overrides for specific components */
+html[data-theme=light] tr:hover td{background:#eaeef2;}
+html[data-theme=light] tr.alert-row td{background:#fff0ee;}
+html[data-theme=light] tr.obs-row td{background:#fff8e1;}
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:13px;}
 ::-webkit-scrollbar{width:5px;height:5px;}
@@ -178,6 +192,16 @@ tr.obs-row td{background:#e3b34110;}
 @keyframes spin{to{transform:rotate(360deg);}}
 .empty{text-align:center;padding:2rem;color:var(--muted);font-size:.8rem;}
 
+/* KPI PILLS (mini) */
+.kpi-pill{display:flex;align-items:center;gap:.6rem;padding:.5rem .9rem;background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);min-width:120px;}
+.kpi-pill-val{font-size:1.1rem;font-weight:700;}
+.kpi-pill-info{display:flex;flex-direction:column;}
+.kpi-pill-label{font-size:.63rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;}
+.c-ok{color:var(--green2);}  .c-green{color:var(--green2);}
+.c-warn{color:var(--yellow2);} .c-err{color:var(--red2);}
+.c-blue{color:var(--blue2);} .c-purple{color:var(--purple2);}
+.c-orange{color:var(--orange2);}
+
 /* TIR SUBTABS */
 .subtab-bar{display:flex;gap:.35rem;margin-bottom:.75rem;border-bottom:1px solid var(--border);padding-bottom:.5rem;}
 .subtab{padding:.3rem .75rem;border-radius:var(--radius);font-size:.75rem;font-weight:600;cursor:pointer;border:1px solid var(--border2);color:var(--muted2);transition:all .15s;}
@@ -215,6 +239,7 @@ tr.obs-row td{background:#e3b34110;}
     <a href="/mitra.html">◎ Mitra</a>
   </div>
   <div class="nav-end">
+    <button class="btn btn-ghost btn-sm" id="btn-theme" onclick="toggleTema()" title="Alternar tema claro/oscuro" style="font-size:.85rem;padding:.25rem .55rem;">🌙</button>
     <button class="btn btn-green btn-sm" onclick="abrirUpload()">⬆ Cargar</button>
     <button class="btn btn-ghost btn-sm" onclick="descargarExcel()">📥 Excel</button>
     <button class="btn btn-ghost btn-sm" onclick="exportarCSV()">⬇ CSV</button>
@@ -245,6 +270,15 @@ tr.obs-row td{background:#e3b34110;}
       <input type="file" id="file-575" accept=".csv,.CSV,.txt,.TXT" onchange="handleFile(this,'575')"/>
       <div class="uz-icon">📄</div>
       <div class="uz-text"><strong>Archivo 575</strong> (SKCLI575)<br><small id="name-575" style="color:var(--green2)"></small></div>
+    </div>
+    <div style="height:.5rem"></div>
+    <div class="upload-zone" id="drop-583"
+      ondragover="event.preventDefault();this.classList.add('drag-over')"
+      ondragleave="this.classList.remove('drag-over')"
+      ondrop="handleDrop(event,'583')" onclick="document.getElementById('file-583').click()">
+      <input type="file" id="file-583" accept=".csv,.CSV,.txt,.TXT" onchange="handleFile(this,'583')"/>
+      <div class="uz-icon">📦</div>
+      <div class="uz-text"><strong>Archivo 583</strong> (Operaciones — opcional)<br><small id="name-583" style="color:var(--green2)"></small></div>
     </div>
     <div class="prog-bar"><div class="prog-fill" id="prog-fill"></div></div>
     <div id="upload-msg" style="font-size:.75rem;margin-top:.5rem;min-height:1rem;"></div>
@@ -323,6 +357,9 @@ tr.obs-row td{background:#e3b34110;}
   </div>
   <div class="tab" onclick="showTab('tab-verificacion',this)">🔬 Verificación
     <span class="tab-badge" id="verif-badge" style="display:none;"></span>
+  </div>
+  <div class="tab" onclick="showTab('tab-operaciones',this)">📦 Operaciones 583
+    <span class="tab-badge warn" id="ops-badge" style="display:none;"></span>
   </div>
   <div class="tab" onclick="showTab('tab-errores',this)">🚨 Errores</div>
   <div class="tab" onclick="showTab('tab-portafolios',this)">💼 Portafolios</div>
@@ -453,6 +490,27 @@ tr.obs-row td{background:#e3b34110;}
   </div>
 </div>
 
+<!-- ── TAB: OPERACIONES 583 ── -->
+<div class="tab-panel" id="tab-operaciones">
+  <div class="banner info" style="margin-bottom:.75rem;">
+    📦 <strong>Operaciones del día (583)</strong> — Compras, ventas, cobros de interés/dividendo, incremento/retiro de capital. Carga el archivo 583 en <em>⬆ Cargar</em> para activar esta sección y mejorar la precisión de la causación manual.
+  </div>
+  <div id="kpi-ops-row" style="display:flex;gap:.6rem;flex-wrap:wrap;margin-bottom:.75rem;">
+    <div class="kpi-pill"><div class="kpi-pill-val c-blue" id="ops-total">—</div><div class="kpi-pill-info"><div class="kpi-pill-label">Total registros</div></div></div>
+    <div class="kpi-pill"><div class="kpi-pill-val c-green" id="ops-intdiv">—</div><div class="kpi-pill-info"><div class="kpi-pill-label">Total Int/Div cobrados</div></div></div>
+    <div class="kpi-pill"><div class="kpi-pill-val c-purple" id="ops-incret">—</div><div class="kpi-pill-info"><div class="kpi-pill-label">Inc/Ret Capital neto</div></div></div>
+    <div class="kpi-pill"><div class="kpi-pill-val" id="ops-archivo" style="font-size:.75rem;">—</div><div class="kpi-pill-info"><div class="kpi-pill-label">Archivo</div></div></div>
+  </div>
+  <div class="filter-bar">
+    <input type="text" id="fil-busq-ops" placeholder="ISIN / Especie / Consec..." oninput="renderOps()" style="width:220px;"/>
+    <select id="fil-tipo-ops" onchange="renderOps()"><option value="">Todos los tipos</option></select>
+    <span id="count-ops" style="color:var(--muted);font-size:.75rem;"></span>
+    <button class="btn btn-ghost btn-sm" onclick="cargarOps583()" style="margin-left:auto;">↺ Recargar</button>
+    <button class="btn btn-ghost btn-sm" onclick="exportarOpsCSV()">⬇ CSV</button>
+  </div>
+  <div class="table-wrap" id="wrap-ops"><div class="empty">Carga el archivo 583 para ver las operaciones del día</div></div>
+</div>
+
 <!-- ── TAB: ERRORES ── -->
 <div class="tab-panel" id="tab-errores">
   <div class="filter-bar">
@@ -526,6 +584,9 @@ tr.obs-row td{background:#e3b34110;}
     <div class="table-wrap" id="wrap-verificacion"><div class="empty">Haz clic en "Calcular verificación" para iniciar</div></div>
   </div>
   <div id="wrap-verif-causacion" style="display:none;">
+    <div id="banner-583-faltante" class="banner warn" style="display:none;margin-bottom:.75rem;">
+      ⚠ Archivo <strong>583 no encontrado</strong> — causación calculada sin INT/DIV. Carga el 583 en <strong>⬆ Cargar</strong> para mayor precisión.
+    </div>
     <!-- KPI causación -->
     <div id="kpi-verif-caus-row" style="display:flex;gap:.6rem;flex-wrap:wrap;margin-bottom:.75rem;">
       <div class="kpi-pill"><div class="kpi-pill-val c-blue" id="kvc-total">—</div><div class="kpi-pill-info"><div class="kpi-pill-label">Posiciones 575</div></div></div>
@@ -540,18 +601,45 @@ tr.obs-row td{background:#e3b34110;}
 
 <script>
 const API='';
-const PL={
-  paper_bgcolor:'transparent',plot_bgcolor:'transparent',
-  font:{color:'#8b949e',size:10,family:'Inter'},
-  margin:{t:10,b:35,l:50,r:15},
-  legend:{bgcolor:'transparent',font:{size:9}},
-  xaxis:{gridcolor:'#21262d',zerolinecolor:'#30363d'},
-  yaxis:{gridcolor:'#21262d',zerolinecolor:'#30363d'},
-};
+
+// ── TEMA CLARO / OSCURO ────────────────────────────────────────────────────────
+function _PL(){
+  const light=document.documentElement.dataset.theme==='light';
+  const txt=light?'#1f2328':'#8b949e';
+  const grid=light?'#d0d7de':'#21262d';
+  return{
+    paper_bgcolor:'transparent',plot_bgcolor:'transparent',
+    font:{color:txt,size:10,family:'Inter'},
+    margin:{t:10,b:35,l:50,r:15},
+    legend:{bgcolor:'transparent',font:{size:9}},
+    xaxis:{gridcolor:grid,zerolinecolor:grid},
+    yaxis:{gridcolor:grid,zerolinecolor:grid},
+  };
+}
+// PL como getter para que sea siempre fresco
+const PL={get paper_bgcolor(){return _PL().paper_bgcolor},get plot_bgcolor(){return _PL().plot_bgcolor},get font(){return _PL().font},get margin(){return _PL().margin},get legend(){return _PL().legend},get xaxis(){return _PL().xaxis},get yaxis(){return _PL().yaxis}};
+
+function toggleTema(){
+  const html=document.documentElement;
+  const light=html.dataset.theme==='light';
+  html.dataset.theme=light?'dark':'light';
+  document.getElementById('btn-theme').textContent=light?'🌙':'☀';
+  localStorage.setItem('porfin_theme',html.dataset.theme);
+  // Re-renderizar gráficas con los nuevos colores
+  if(_resumen){cargarResumen(document.getElementById('sel-fecha').value);}
+}
+(function initTema(){
+  const t=localStorage.getItem('porfin_theme')||'dark';
+  document.documentElement.dataset.theme=t;
+  document.addEventListener('DOMContentLoaded',()=>{
+    const btn=document.getElementById('btn-theme');
+    if(btn)btn.textContent=t==='light'?'☀':'🌙';
+  });
+})();
 
 let _resumen=null,_erroresData=null,_causData=null,_posData=[];
 let _fondosData=null,_tirData596=null,_tirData575=null,_tirActivo='596',_fondoSel=null;
-let _up596=null,_up575=null;
+let _up596=null,_up575=null,_up583=null;
 
 function debounce(fn,ms){let t;return(...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms);};}
 async function fetchJSON(u){const r=await fetch(API+u);if(!r.ok)throw new Error(`${r.status}`);return r.json();}
@@ -573,6 +661,7 @@ function showTab(id,el){
   if(id==='tab-errores'&&_erroresData&&document.getElementById('wrap-errores').innerHTML.includes('spinner'))renderErrores();
   if(id==='tab-portafolios'&&document.getElementById('wrap-portafolios').innerHTML.includes('spinner'))cargarPortafolios();
   if(id==='tab-monedas'&&document.getElementById('wrap-monedas-596').innerHTML.includes('spinner'))cargarMonedasTab();
+  if(id==='tab-operaciones'&&!_ops583Data.length)cargarOps583();
 }
 
 // ── UPLOAD ───────────────────────────────────────────────────────────────────
@@ -582,13 +671,24 @@ function abrirUpload(){
   document.getElementById('modal-upload').classList.add('open');
 }
 function cerrarUpload(){document.getElementById('modal-upload').classList.remove('open');}
-function handleFile(inp,tipo){const f=inp.files[0];if(!f)return;if(tipo==='596'){_up596=f;document.getElementById('name-596').textContent=f.name;}else{_up575=f;document.getElementById('name-575').textContent=f.name;}}
-function handleDrop(ev,tipo){ev.preventDefault();document.getElementById('drop-'+tipo).classList.remove('drag-over');const f=ev.dataTransfer.files[0];if(!f)return;if(tipo==='596'){_up596=f;document.getElementById('name-596').textContent=f.name;}else{_up575=f;document.getElementById('name-575').textContent=f.name;}}
+function handleFile(inp,tipo){
+  const f=inp.files[0];if(!f)return;
+  if(tipo==='596'){_up596=f;document.getElementById('name-596').textContent=f.name;}
+  else if(tipo==='575'){_up575=f;document.getElementById('name-575').textContent=f.name;}
+  else if(tipo==='583'){_up583=f;document.getElementById('name-583').textContent=f.name;}
+}
+function handleDrop(ev,tipo){
+  ev.preventDefault();document.getElementById('drop-'+tipo).classList.remove('drag-over');
+  const f=ev.dataTransfer.files[0];if(!f)return;
+  if(tipo==='596'){_up596=f;document.getElementById('name-596').textContent=f.name;}
+  else if(tipo==='575'){_up575=f;document.getElementById('name-575').textContent=f.name;}
+  else if(tipo==='583'){_up583=f;document.getElementById('name-583').textContent=f.name;}
+}
 async function subirArchivos(){
   const fecha=document.getElementById('up-fecha').value.trim();
   const msg=document.getElementById('upload-msg');
   if(!fecha||!/^\d{8}$/.test(fecha)){msg.innerHTML='<span style="color:var(--red2)">Fecha inválida. Formato: YYYYMMDD</span>';return;}
-  const archivos=[{file:_up596,tipo:'596'},{file:_up575,tipo:'575'}].filter(a=>a.file);
+  const archivos=[{file:_up596,tipo:'596'},{file:_up575,tipo:'575'},{file:_up583,tipo:'583'}].filter(a=>a.file);
   if(!archivos.length){msg.innerHTML='<span style="color:var(--red2)">Selecciona al menos un archivo.</span>';return;}
   const fill=document.getElementById('prog-fill');
   msg.innerHTML='Subiendo...';let ok=0;
@@ -616,8 +716,8 @@ async function cargarFechas(){
 async function cargarTodo(){
   const fecha=document.getElementById('sel-fecha').value;
   if(!fecha)return;
-  _fondosData=null;_tirData596=null;_tirData575=null;_fondoSel=null;
-  ['wrap-causaciones','wrap-errores','wrap-portafolios','wrap-monedas-596','wrap-fondos','wrap-tir']
+  _fondosData=null;_tirData596=null;_tirData575=null;_fondoSel=null;_ops583Data=[];_ops583Raw=null;
+  ['wrap-causaciones','wrap-errores','wrap-portafolios','wrap-monedas-596','wrap-fondos','wrap-tir','wrap-ops']
     .forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML='<div class="empty"><span class="spinner"></span></div>';});
   document.getElementById('wrap-fondo-detalle').style.display='none';
   document.getElementById('wrap-fondos-lista').style.display='block';
@@ -1186,6 +1286,10 @@ async function cargarVerificacion(){
     el583.textContent=d2.tiene_583?'✓ Disponible':'✗ No encontrado';
     el583.style.color=d2.tiene_583?'var(--green2)':'var(--muted)';
 
+    // Banner 583 faltante
+    const ban583=document.getElementById('banner-583-faltante');
+    if(ban583)ban583.style.display=d2.tiene_583?'none':'flex';
+
     renderVerifCausTable();
   }catch(e){wc.innerHTML=`<div class="empty">Error causación: ${e.message}</div>`;}
 }
@@ -1262,6 +1366,93 @@ function fmtN(v){
   const n=parseFloat(v);
   if(isNaN(n))return v;
   return n.toLocaleString('es-CO',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+
+// ── OPERACIONES 583 ───────────────────────────────────────────────────────────
+let _ops583Data=[], _ops583Raw=null;
+
+async function cargarOps583(){
+  const fecha=document.getElementById('sel-fecha').value;
+  if(!fecha)return;
+  const wrap=document.getElementById('wrap-ops');
+  wrap.innerHTML='<div class="empty"><span class="spinner"></span> Cargando operaciones 583…</div>';
+  try{
+    _ops583Raw=await fetchJSON(`/api/porfin/operaciones/${fecha}`);
+    if(_ops583Raw.error){
+      wrap.innerHTML=`<div class="empty">⚠ ${_ops583Raw.error} — Carga el archivo 583 en ⬆ Cargar</div>`;
+      return;
+    }
+    _ops583Data=_ops583Raw.registros||[];
+
+    // KPIs
+    document.getElementById('ops-total').textContent=fmt(_ops583Raw.total_registros);
+    document.getElementById('ops-intdiv').textContent=fmtN(_ops583Raw.total_int_div||0);
+    document.getElementById('ops-incret').textContent=fmtN(_ops583Raw.total_inc_ret||0);
+    document.getElementById('ops-archivo').textContent=_ops583Raw.archivo||'—';
+
+    // Badge tab
+    const tipos=_ops583Raw.tipos_transaccion||{};
+    const badge=document.getElementById('ops-badge');
+    if(_ops583Raw.total_registros>0){badge.textContent=_ops583Raw.total_registros;badge.style.display='';}
+
+    // Poblar filtro tipo
+    const sel=document.getElementById('fil-tipo-ops');
+    sel.innerHTML='<option value="">Todos los tipos</option>'+
+      Object.keys(tipos).sort().map(t=>`<option value="${t}">${t} (${tipos[t]})</option>`).join('');
+
+    renderOps();
+  }catch(e){
+    wrap.innerHTML=`<div class="empty">Sin archivo 583 para ${fecha}. Cárgalo en ⬆ Cargar.</div>`;
+  }
+}
+
+function renderOps(){
+  if(!_ops583Data.length){return;}
+  const busq=(document.getElementById('fil-busq-ops').value||'').toUpperCase();
+  const tipo=document.getElementById('fil-tipo-ops').value.toUpperCase();
+  let rows=_ops583Data;
+  if(busq)rows=rows.filter(r=>['ISIN','ESPECIE','CONSEC','PORTAFOLIO'].some(c=>r[c]&&String(r[c]).toUpperCase().includes(busq)));
+  if(tipo)rows=rows.filter(r=>r.TRANSACCION&&r.TRANSACCION.toUpperCase().includes(tipo));
+  document.getElementById('count-ops').textContent=`${rows.length} registros`;
+  const wrap=document.getElementById('wrap-ops');
+  if(!rows.length){wrap.innerHTML='<div class="empty">Sin registros para los filtros aplicados</div>';return;}
+  const cols=['TRANSACCION','TIPO_OPER','CONSEC','ESPECIE','ISIN','MONEDA','VAL_OPERACION','PRECIO_OPE','VR_RECIBIDO','PORTAFOLIO'];
+  const avail=cols.filter(c=>rows[0].hasOwnProperty(c));
+  let html=`<table><thead><tr>${avail.map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>`;
+  const _cls=t=>{
+    if(!t)return '';t=t.toUpperCase();
+    if(t.includes('COBRO'))return 'style="background:rgba(63,185,80,.08);"';
+    if(t.includes('RETIRO'))return 'style="background:rgba(248,81,73,.08);"';
+    if(t.includes('INCREMENTO'))return 'style="background:rgba(88,166,255,.08);"';
+    return '';
+  };
+  for(const r of rows){
+    html+=`<tr ${_cls(r.TRANSACCION)}>`;
+    for(const c of avail){
+      const v=r[c];if(v==null){html+=`<td>—</td>`;continue;}
+      if(c==='TRANSACCION'){
+        const t=String(v).trim().toUpperCase();
+        const bc=t.includes('COBRO')?'badge-green':t.includes('RETIRO')?'badge-red':t.includes('INCREMENTO')?'badge-blue':'badge-yellow';
+        html+=`<td><span class="badge ${bc}">${v}</span></td>`;
+      }else if(['VAL_OPERACION','VR_RECIBIDO'].includes(c)&&typeof v==='number'){
+        html+=`<td class="${nc(v)}">${fmt(v,2)}</td>`;
+      }else if(c==='PRECIO_OPE'&&typeof v==='number'){
+        html+=`<td>${fmtN(v,6)}</td>`;
+      }else{html+=`<td>${String(v).trim()}</td>`;}
+    }
+    html+='</tr>';
+  }
+  html+='</tbody></table>';
+  wrap.innerHTML=html;
+}
+
+function exportarOpsCSV(){
+  if(!_ops583Data.length){alert('No hay datos de operaciones cargados.');return;}
+  const keys=Object.keys(_ops583Data[0]).filter(k=>k!=='_ROW_ID');
+  const csv=[keys.join(','),..._ops583Data.map(r=>keys.map(k=>{const v=r[k];if(v==null)return'';if(typeof v==='string'&&v.includes(','))return`"${v}"`;return v;}).join(','))].join('\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));
+  a.download=`operaciones_583_${document.getElementById('sel-fecha').value}.csv`;a.click();
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
