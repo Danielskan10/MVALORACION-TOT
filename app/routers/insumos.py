@@ -110,7 +110,23 @@ def _parse_num(s: str):
 
 
 def cargar_sp(fecha: str) -> pd.DataFrame:
-    """SP = Bolsa de Valores de Colombia, precios renta fija local (fixed-width .001)."""
+    """SP = Bolsa de Valores de Colombia, precios renta fija local (fixed-width .001).
+    Columnas según legacy Revisiones_Valoracion:
+      l[0:7]   = Numero_Secuencia
+      l[7:20]  = NEMO
+      l[20:32] = ISIN
+      l[51:59] = Emision
+      l[59:67] = Vcto
+      l[67:75] = Vcto2
+      l[75:77] = Tipo_Tasa
+      l[77:81] = Plazo
+      l[81:84] = Base
+      l[86:89] = Moneda
+      l[96:105]= P_SUCIO  ← precio principal para valoración
+      l[122:129]= P_LIMPIO (alternativo)
+      l[179:187]= Tasa
+    Filtro de líneas válidas: l[51:53] empieza con "20" (fecha emisión).
+    """
     sf = _sufijo_fecha(fecha)
     path = _infovalmer_dir(fecha) / f"SP{sf}.001"
     if not path.exists():
@@ -120,32 +136,36 @@ def cargar_sp(fecha: str) -> pd.DataFrame:
         with open(path, "r", encoding="latin-1", errors="ignore") as f:
             for ln in f:
                 ln = ln.rstrip("\n")
-                if len(ln) < 130:
+                if len(ln) < 107 or not ln[51:53].startswith("20"):
                     continue
-                tipo = ln[7:8].strip()
-                if tipo not in ("D", "T", "V", ""):
-                    continue
-                precio = _parse_num(ln[110:129])
+                p_sucio  = _parse_num(ln[96:105])
+                p_limpio = _parse_num(ln[122:129]) if len(ln) >= 129 else None
+                precio   = p_sucio if p_sucio is not None else p_limpio
                 if precio is None:
                     continue
+                isin = ln[20:32].strip().upper()
+                nemo = ln[7:20].strip().upper()
                 filas.append({
                     "Numero_Secuencia": ln[0:7].strip(),
-                    "Tipo_Registro":    tipo,
-                    "NEMO":             ln[8:20].strip(),
-                    "ISIN":             ln[20:32].strip(),
-                    "Numero_Emision":   ln[32:50].strip(),
+                    "NEMO":             nemo,
+                    "ISIN":             isin,
+                    "Emision":          ln[51:59].strip(),
+                    "Vcto":             ln[59:67].strip(),
+                    "Tipo_Tasa":        ln[75:77].strip(),
+                    "Plazo":            ln[77:81].strip(),
+                    "Base":             ln[81:84].strip(),
+                    "Moneda":           ln[86:89].strip(),
+                    "P_SUCIO":          p_sucio,
+                    "P_LIMPIO":         p_limpio,
+                    "Tasa":             _parse_num(ln[179:187]) if len(ln) >= 187 else None,
                     "PRECIO":           precio,
-                    "ID":               ln[20:32].strip(),
+                    "ID":               isin if isin else nemo,
                     "FUENTE":           "SP",
                 })
     except Exception as e:
         logger.error(f"Error cargando SP: {e}")
         return pd.DataFrame()
-    df = pd.DataFrame(filas)
-    df["NEMO"] = df["NEMO"].str.strip().str.upper()
-    df["ISIN"] = df["ISIN"].str.strip().str.upper()
-    df["ID"]   = df["ISIN"].where(df["ISIN"] != "", df["NEMO"])
-    return df
+    return pd.DataFrame(filas)
 
 
 def cargar_sw(fecha: str) -> pd.DataFrame:
@@ -214,6 +234,44 @@ def cargar_tp(fecha: str) -> pd.DataFrame:
                 })
     except Exception as e:
         logger.error(f"Error cargando TP: {e}")
+        return pd.DataFrame()
+    return pd.DataFrame(filas)
+
+
+def cargar_sv(fecha: str) -> pd.DataFrame:
+    """SV = Tasas de interés de referencia (Infovalmer SV{MMDDYY}.001).
+    Columnas según legacy:
+      l[0:5]  = Codigo
+      l[5:6]  = Tipo
+      l[6:14] = Fecha
+      l[14:18]= Plazo
+      l[18:33]= Tasa
+    Filtro: l[6:8] empieza con "20" (año de la fecha).
+    """
+    sf = _sufijo_fecha(fecha)
+    path = _infovalmer_dir(fecha) / f"SV{sf}.001"
+    if not path.exists():
+        return pd.DataFrame()
+    filas = []
+    try:
+        with open(path, "r", encoding="latin-1", errors="ignore") as f:
+            for ln in f:
+                ln = ln.rstrip("\n")
+                if len(ln) < 18 or not ln[6:8].startswith("20"):
+                    continue
+                tasa = _parse_num(ln[18:33]) if len(ln) >= 33 else None
+                filas.append({
+                    "Codigo": ln[0:5].strip(),
+                    "Tipo":   ln[5:6].strip(),
+                    "Fecha":  ln[6:14].strip(),
+                    "Plazo":  ln[14:18].strip(),
+                    "Tasa":   tasa,
+                    "ID":     ln[0:5].strip(),
+                    "PRECIO": tasa,
+                    "FUENTE": "SV",
+                })
+    except Exception as e:
+        logger.error(f"Error cargando SV: {e}")
         return pd.DataFrame()
     return pd.DataFrame(filas)
 
@@ -318,8 +376,10 @@ def cargar_sb(fecha: str) -> pd.DataFrame:
 
 
 def cargar_indicadores(fecha: str) -> pd.DataFrame:
-    """Indicadores RF/RV del día"""
-    path = _find_file(fecha, [r"indicadores.*\.csv", r"^" + fecha + r".*\.csv"])
+    """Indicadores RF del día — archivo {fecha}.csv (Consulta Renta Fija).
+    Nombre exacto según legacy: {yyyymmdd}.csv en carpeta downloads / data."""
+    # Busca {fecha}.csv primero (nombre exacto legacy), luego fallback genérico
+    path = _find_file(fecha, [rf"^{fecha}\.csv$", r"indicadores.*\.csv"])
     if not path:
         return pd.DataFrame()
     try:
@@ -327,10 +387,42 @@ def cargar_indicadores(fecha: str) -> pd.DataFrame:
         if df.empty:
             return pd.DataFrame()
         df.columns = [str(c).strip() for c in df.columns]
-        df["FUENTE"] = "IND"
+        # Normalizar columna INDICADOR / PRECIO si existen
+        ind_col = next((c for c in df.columns if c.upper() == "INDICADOR"), None)
+        pre_col = next((c for c in df.columns if c.upper() == "PRECIO"), None)
+        df["FUENTE"] = "IND_RF"
+        if ind_col:
+            df["ID"] = df[ind_col].astype(str).str.strip().str.upper()
+        if pre_col:
+            df["PRECIO"] = pd.to_numeric(df[pre_col].astype(str).str.replace(",", "."), errors="coerce")
         return df
     except Exception as e:
-        logger.error(f"Error cargando indicadores: {e}")
+        logger.error(f"Error cargando indicadores RF: {e}")
+        return pd.DataFrame()
+
+
+def cargar_indicadores_rv(fecha: str) -> pd.DataFrame:
+    """Indicadores RV del día — archivo RV{mmdd}.csv (Consulta Renta Variable).
+    Nombre exacto según legacy: RV{mmdd}.csv donde mmdd = mes+día de fecha."""
+    mmdd = fecha[4:8]  # yyyyMMDD → tomar [4:8] = MMDD
+    path = _find_file(fecha, [rf"^RV{mmdd}\.csv$", r"RV\d{4}\.csv", r"rv.*\.csv"])
+    if not path:
+        return pd.DataFrame()
+    try:
+        df = _read_csv_auto(path)
+        if df.empty:
+            return pd.DataFrame()
+        df.columns = [str(c).strip() for c in df.columns]
+        ind_col = next((c for c in df.columns if c.upper() == "INDICADOR"), None)
+        pre_col = next((c for c in df.columns if c.upper() == "PRECIO"), None)
+        df["FUENTE"] = "IND_RV"
+        if ind_col:
+            df["ID"] = df[ind_col].astype(str).str.strip().str.upper()
+        if pre_col:
+            df["PRECIO"] = pd.to_numeric(df[pre_col].astype(str).str.replace(",", "."), errors="coerce")
+        return df
+    except Exception as e:
+        logger.error(f"Error cargando indicadores RV: {e}")
         return pd.DataFrame()
 
 
@@ -368,14 +460,16 @@ def cargar_monedas(fecha: str) -> pd.DataFrame:
 
 
 CARGADORES = {
-    "SP":    cargar_sp,
-    "SW":    cargar_sw,
-    "TP":    cargar_tp,
-    "MX":    cargar_mx,
-    "MX_RV": cargar_mx_rv,
-    "NOTAS": cargar_notas,
-    "SB":    cargar_sb,
-    "IND":   cargar_indicadores,
+    "SP":     cargar_sp,
+    "SW":     cargar_sw,
+    "TP":     cargar_tp,
+    "SV":     cargar_sv,
+    "MX":     cargar_mx,
+    "MX_RV":  cargar_mx_rv,
+    "NOTAS":  cargar_notas,
+    "SB":     cargar_sb,
+    "IND_RF": cargar_indicadores,
+    "IND_RV": cargar_indicadores_rv,
 }
 
 
@@ -516,6 +610,41 @@ def get_tp(
     if busqueda:
         mask = df.apply(lambda r: r.astype(str).str.upper().str.contains(busqueda.upper(), na=False).any(), axis=1)
         df = df[mask]
+    return df.replace({float("nan"): None}).head(limit).to_dict(orient="records")
+
+
+@router.get("/sv/{fecha}")
+def get_sv(
+    fecha: str,
+    busqueda: Optional[str] = Query(None),
+    limit: int = Query(500),
+):
+    """Tasas de interés de referencia SV (Infovalmer)."""
+    df = cargar_sv(fecha)
+    if df.empty:
+        return []
+    if busqueda:
+        busq = busqueda.upper()
+        mask = df.apply(lambda r: r.astype(str).str.upper().str.contains(busq, na=False).any(), axis=1)
+        df = df[mask]
+    return df.replace({float("nan"): None}).head(limit).to_dict(orient="records")
+
+
+@router.get("/indicadores_rf/{fecha}")
+def get_indicadores_rf(fecha: str, limit: int = Query(500)):
+    """Indicadores Renta Fija — {fecha}.csv"""
+    df = cargar_indicadores(fecha)
+    if df.empty:
+        return []
+    return df.replace({float("nan"): None}).head(limit).to_dict(orient="records")
+
+
+@router.get("/indicadores_rv/{fecha}")
+def get_indicadores_rv(fecha: str, limit: int = Query(500)):
+    """Indicadores Renta Variable — RV{mmdd}.csv"""
+    df = cargar_indicadores_rv(fecha)
+    if df.empty:
+        return []
     return df.replace({float("nan"): None}).head(limit).to_dict(orient="records")
 
 

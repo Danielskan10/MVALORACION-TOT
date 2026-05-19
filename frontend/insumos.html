@@ -268,6 +268,7 @@ tr.row-warn:hover td{background:#e3b34122;}
     <div class="sb-item" onclick="mostrarPanel('panel-sp',this)"><span class="sb-icon">◈</span>SP — BVC Renta Fija<span class="sb-badge ok" id="sb-badge-sp">—</span></div>
     <div class="sb-item" onclick="mostrarPanel('panel-sw',this)"><span class="sb-icon">◈</span>SW — Secundario<span class="sb-badge ok" id="sb-badge-sw">—</span></div>
     <div class="sb-item" onclick="mostrarPanel('panel-tp',this)"><span class="sb-icon">◈</span>TP — Tít. Participativos<span class="sb-badge ok" id="sb-badge-tp">—</span></div>
+    <div class="sb-item" onclick="mostrarPanel('panel-sv',this)"><span class="sb-icon">◈</span>SV — Tasas Referencia<span class="sb-badge ok" id="sb-badge-sv">—</span></div>
 
     <hr class="sb-divider"/>
     <div class="sb-section">Infovalmer — Internacional</div>
@@ -320,6 +321,7 @@ tr.row-warn:hover td{background:#e3b34122;}
           <select id="fil-prov-var" onchange="cargarVariaciones()">
             <option value="SP">SP — BVC Renta Fija</option>
             <option value="SW">SW — Secundario</option>
+            <option value="SV">SV — Tasas Referencia</option>
             <option value="MX">MX — Renta Fija Int.</option>
             <option value="NOTAS">NOTAS</option>
             <option value="MX_RV">MX_RV</option>
@@ -359,6 +361,7 @@ tr.row-warn:hover td{background:#e3b34122;}
           <span id="chk-provs-comp" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
             <label style="font-size:.78rem;color:var(--text);display:flex;align-items:center;gap:.25rem;"><input type="checkbox" value="SP" checked> SP</label>
             <label style="font-size:.78rem;color:var(--text);display:flex;align-items:center;gap:.25rem;"><input type="checkbox" value="SW"> SW</label>
+            <label style="font-size:.78rem;color:var(--text);display:flex;align-items:center;gap:.25rem;"><input type="checkbox" value="SV"> SV</label>
             <label style="font-size:.78rem;color:var(--text);display:flex;align-items:center;gap:.25rem;"><input type="checkbox" value="MX" checked> MX</label>
             <label style="font-size:.78rem;color:var(--text);display:flex;align-items:center;gap:.25rem;"><input type="checkbox" value="NOTAS"> NOTAS</label>
             <label style="font-size:.78rem;color:var(--text);display:flex;align-items:center;gap:.25rem;"><input type="checkbox" value="MX_RV"> MX_RV</label>
@@ -456,6 +459,18 @@ tr.row-warn:hover td{background:#e3b34122;}
       </div>
     </div>
 
+    <!-- ─── PANEL SV ─── -->
+    <div class="panel" id="panel-sv">
+      <div class="filter-bar">
+        <input type="text" id="fil-busq-sv" placeholder="Buscar Código / Tasa..." oninput="debounce(cargarSV,350)()" style="width:240px;"/>
+        <span id="cnt-sv" style="color:var(--muted);font-size:.75rem;margin-left:.25rem;"></span>
+        <span style="margin-left:auto;font-size:.72rem;color:var(--muted);">SV — Tasas de Interés de Referencia (J:\INFOVALMER)</span>
+      </div>
+      <div class="table-wrap" id="wrap-sv">
+        <div class="empty"><span class="spinner"></span></div>
+      </div>
+    </div>
+
     <!-- ─── PANEL MX ─── -->
     <div class="panel" id="panel-mx">
       <div class="filter-bar">
@@ -530,7 +545,7 @@ const PL={
 };
 
 let _allDates=[], _comparacion=[], _variaciones=[], _curvas=[], _mxData=[], _notasData=[], _mxrvData=[];
-let _spData=[], _swData=[], _tpData=[];
+let _spData=[], _swData=[], _tpData=[], _svData=[];
 
 function debounce(fn,ms){let t;return(...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms);};}
 function fmt(v,d=4){if(v==null||isNaN(v))return'—';if(typeof v!=='number')v=Number(v);return v.toLocaleString('es-CO',{minimumFractionDigits:d,maximumFractionDigits:d});}
@@ -559,6 +574,7 @@ function mostrarPanel(id,el){
   if(id==='panel-sp'&&!_spData.length)cargarSP();
   if(id==='panel-sw'&&!_swData.length)cargarSW();
   if(id==='panel-tp'&&!_tpData.length)cargarTP();
+  if(id==='panel-sv'&&!_svData.length)cargarSV();
   if(id==='panel-mx'&&!_mxData.length)cargarMX();
   if(id==='panel-notas'&&!_notasData.length)cargarNotas();
   if(id==='panel-mxrv'&&!_mxrvData.length)cargarMXRV();
@@ -583,7 +599,7 @@ async function cargarFechas(){
 }
 function fmtF(f){return f?`${f.slice(0,4)}-${f.slice(4,6)}-${f.slice(6)}`:'?';}
 
-function onFecha(){_mxData=[];_notasData=[];_mxrvData=[];_curvas=[];_comparacion=[];_spData=[];_swData=[];_tpData=[];recargar();}
+function onFecha(){_mxData=[];_notasData=[];_mxrvData=[];_curvas=[];_comparacion=[];_spData=[];_swData=[];_tpData=[];_svData=[];recargar();}
 function onFechaAnt(){cargarVariaciones();}
 
 async function recargar(){
@@ -1137,6 +1153,23 @@ async function cargarTP(){
     document.getElementById('sb-badge-tp').className='sb-badge '+(_tpData.length?'ok':'');
     renderTablaGeneral('wrap-tp',_tpData,['Codigo','ISIN','Precio','Descripcion'],{Precio:6});
   }catch(e){wrap.innerHTML=`<div class="empty">Sin datos TP (J: no disponible): ${e.message}</div>`;}
+}
+
+// ─── SV ──────────────────────────────────────────────────────────────────────
+async function cargarSV(){
+  const fecha=document.getElementById('sel-fecha').value;
+  const busq=(document.getElementById('fil-busq-sv').value||'').toUpperCase();
+  const wrap=document.getElementById('wrap-sv');
+  wrap.innerHTML='<div class="empty"><span class="spinner"></span></div>';
+  try{
+    const params=new URLSearchParams({limit:'500'});
+    if(busq)params.set('busqueda',busq);
+    _svData=await fetchJSON(`/api/insumos/sv/${fecha}?${params}`);
+    document.getElementById('cnt-sv').textContent=`${_svData.length} registros`;
+    document.getElementById('sb-badge-sv').textContent=_svData.length||'—';
+    document.getElementById('sb-badge-sv').className='sb-badge '+(_svData.length?'ok':'');
+    renderTablaGeneral('wrap-sv',_svData,['Codigo','Tipo','Fecha','Plazo','Tasa'],{Tasa:6});
+  }catch(e){wrap.innerHTML=`<div class="empty">Sin datos SV (J: no disponible): ${e.message}</div>`;}
 }
 
 // ─── CURVAS ──────────────────────────────────────────────────────────────────

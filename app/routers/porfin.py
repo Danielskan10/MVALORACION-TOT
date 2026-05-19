@@ -1068,6 +1068,29 @@ _TIPOS_PORC_MONEDA = {
     "TD", "NESTR",
 }
 
+# Factores especiales por LLAVE (del legacy Revisiones_Valoracion).
+# Cada entrada puede ser:
+#   float  → factor para vlr_mer_or * moneda * factor  (fondos JZ*/JH*)
+#   dict   → {"factor": ..., "tipo": "nominal"|"fijo"|"vlr_mer_or"}
+_SPECIAL_LLAVES: Dict[str, Any] = {
+    # Fondos especiales con factor numérico
+    "JZCJ3": 1.064920,  "JZAXO": 1.673050,  "JZAVN": 1.082659,
+    "JHCKT": 0.938460,  "JGDKT": 1.160131,  "JZAKT": 1.076858,
+    "JHPKT": 0.958241,  "JZAPJ": 0.816438,  "JZDP6": 0.845205,
+    "JHM0Y": 0.978898,  "JZAQK": 1.041950,  "JZAOK": 1.183056,
+    "JHHJ2": 0.899836,  "JHIJ4": 1.082530,  "JZA1X": 1.024280,
+    "JZBJQ": 1.000409,  "JHDJQ": 0.946999,  "JZANQ": 0.984023,
+    "JZEXO": 1.638932,  "JZAKE": 0.943544,  "JZAY0": 1.173927,
+    "JZASS": 1.008909,  "JHKK0": 0.976514,  "JZAVX": 0.981900,
+    "JHS6":  0.885150,  "JZAVW": 1.080053,  "JZFVW": 1.079829,
+    # Fondos con nominal fijo (factor = nominal_de_referencia)
+    "2ACAC": {"factor": 180138.96,         "tipo": "nominal"},
+    "2FIU1": {"factor": 9687.34,           "tipo": "nominal"},
+    "8LTGK": {"factor": 1054949999.63,     "tipo": "fijo"},
+    "2BVHA": {"factor": 18368.206568,      "tipo": "vlr_mer_or"},
+    "FVBQA": {"factor": 13593.114169,      "tipo": "vlr_mer_or"},
+}
+
 # Factores moneda para conversión a COP  (cargado en runtime desde monedas)
 def _factor_moneda_estatico(m: str) -> float:
     """Valor fijo 1 si no hay tabla de tasas. La API de verificación
@@ -1085,12 +1108,32 @@ def _calcular_valor_fila(
     vlr_mercado: float,
     precio: float,
     moneda_factor: float,
+    llave: str = "",
 ) -> Optional[float]:
     """
     Calcula el valor de mercado manual para una posición.
     Devuelve None si faltan datos esenciales.
     """
-    tipo = str(tipo).strip().upper()
+    tipo  = str(tipo).strip().upper()
+    llave = str(llave).strip().upper()
+
+    # SPECIAL_LLAVES: fondos con factor propio
+    if llave and llave in _SPECIAL_LLAVES:
+        spec = _SPECIAL_LLAVES[llave]
+        if isinstance(spec, float):
+            # JZ*/JH* → vlr_mer_or * moneda * factor
+            if pd.notna(vlr_mer_or):
+                return vlr_mer_or * moneda_factor * spec
+            return None
+        else:
+            t = spec.get("tipo", "")
+            f = spec.get("factor", 1.0)
+            if t == "nominal":
+                return f * moneda_factor if pd.notna(f) else None
+            elif t == "fijo":
+                return f * moneda_factor if pd.notna(f) else None
+            elif t == "vlr_mer_or":
+                return vlr_mer_or * f if pd.notna(vlr_mer_or) else None
 
     if tipo in ("FCPE", "DFI", "FONDOS DE PENSION"):
         if pd.notna(vlr_mer_or):
@@ -1251,21 +1294,44 @@ def verificacion_valoracion(
     def _norm(s):
         return str(s).strip().upper()
 
+    def _keya(especie: str, isin: str, nemo: str, moneda: str, llave: str) -> str:
+        """Determina la clave de búsqueda de precio según el tipo de especie (KEYA logic del legacy)."""
+        esp = especie.upper()
+        # Fondos de inversión colectiva y similares: usar MONEDA como clave
+        if any(k in esp for k in ("FIC", "FCP", "FCPE", "CC", "DFI")):
+            return moneda.strip().upper()
+        # Acciones preferentes o ordinarias locales: usar NEMO
+        if any(k in esp for k in ("APR", "AOR", "ACCION")):
+            return nemo
+        # CASH: clave literal
+        if "CASH" in esp:
+            return "CASH"
+        # ADR: usar ISIN
+        if "ADR" in esp:
+            return isin
+        # Todo lo demás (CDT, bonos, TES, ETF, Yankee…): usar ISIN como clave principal
+        return isin if isin else nemo
+
     resultados = []
     for _, r in df.iterrows():
         llave  = _norm(r.get("LLAVE", ""))
         isin   = _norm(r.get("ISIN",  ""))
         nemo   = _norm(r.get("NEMO",  ""))
         moneda = str(r.get("MONEDA", "")).strip()
+        especie = str(r.get("ESPECIE", "")).strip()
 
         # Tipo de activo
         tipo = (mapa_tipo.get(llave) or
                 mapa_tipo.get(isin)  or
                 mapa_tipo.get(nemo)  or "")
 
-        # Precio Infovalmer (buscar por ISIN → NEMO → LLAVE)
-        precio_inf = (precios_inf.get(isin) or
-                      precios_inf.get(nemo) or
+        # KEYA: clave de lookup de precio según tipo de especie
+        keya = _keya(especie, isin, nemo, moneda, llave)
+
+        # Precio Infovalmer: buscar por KEYA primero, luego ISIN → NEMO → LLAVE
+        precio_inf = (precios_inf.get(keya) or
+                      precios_inf.get(isin)  or
+                      precios_inf.get(nemo)  or
                       precios_inf.get(llave))
 
         # Factor moneda
@@ -1288,6 +1354,7 @@ def verificacion_valoracion(
             vlr_mercado=float(vlr_mercado) if pd.notna(vlr_mercado) else float("nan"),
             precio=float(precio_para_calculo) if pd.notna(precio_para_calculo) else float("nan"),
             moneda_factor=mfactor,
+            llave=llave,
         )
 
         # Diferencias
@@ -1323,7 +1390,8 @@ def verificacion_valoracion(
             "LLAVE":              llave,
             "ISIN":               isin,
             "NEMO":               nemo,
-            "ESPECIE":            str(r.get("ESPECIE", "")).strip(),
+            "KEYA":               keya,
+            "ESPECIE":            especie,
             "TITULO":             str(r.get("TITULO",  "")).strip(),
             "TIPO":               tipo,
             "PORTAFOLIO":         str(r.get("PORTAFOLIO", "")).strip(),
@@ -1385,17 +1453,60 @@ def verificacion_causacion(
         ))
         fecha_anterior = fechas[-1] if fechas else None
 
+    # Cargar 583 para INT_DIV (intereses y dividendos cobrados)
+    df583    = _cargar_583(fecha)
+    int_div  = _calcular_int_div(df583)    # dict CONSEC → suma cobros
+    inc_ret  = _calcular_inc_ret_capital(df583)  # dict CONSEC → neto inc/ret
+
+    # Tasas de cambio para CASH causación (NOMINAL * (MONEDA_T - MONEDA_Y))
+    tasas_hoy = _cargar_tasas_cambio(fecha)
+    tasas_ant = _cargar_tasas_cambio(fecha_anterior) if fecha_anterior else {}
+
     resultados = []
     for _, r in df575.iterrows():
-        vlr_hoy = r.get("VLR_MER_HOY")
-        vlr_ant = r.get("VLR_MER_ANT")
+        vlr_hoy  = r.get("VLR_MER_HOY")
+        vlr_ant  = r.get("VLR_MER_ANT")
         caus_mer = r.get("CAUSACION_MER")
         caus_tir = r.get("CAUSACION_TIR")
+        especie  = str(r.get("ESPECIE", "")).strip().upper()
+        titulo   = str(r.get("TITULO",  "")).strip()
+        isin     = str(r.get("ISIN",    "")).strip().upper()
+        moneda   = str(r.get("MONEDA",  "")).strip()
+        nominal  = r.get("NOMINAL")
+        facial   = r.get("FACIAL")
 
-        # Causación manual simple: variación de valor de mercado
+        # Clave para INT_DIV: 575 usa TITULO como CONSEC
+        consec_key = titulo if titulo else isin
+
+        # Causación manual según TIPO
         caus_manual = None
-        if pd.notna(vlr_hoy) and pd.notna(vlr_ant):
-            caus_manual = round(float(vlr_hoy) - float(vlr_ant), 2)
+        metodo_caus = "VLR_DIF"
+
+        if "CASH" in especie:
+            # CASH: NOMINAL * (MONEDA_T - MONEDA_Y) + VAL_X_TASA
+            # VAL_X_TASA ≈ CAUSACION_MONEDA del propio 575 (Porfin ya lo calcula)
+            mfactor_hoy = _resolver_moneda_factor(moneda, tasas_hoy)
+            mfactor_ant = _resolver_moneda_factor(moneda, tasas_ant)
+            caus_moneda = r.get("CAUSACION_MONEDA")
+            if pd.notna(nominal) and mfactor_hoy != mfactor_ant:
+                val_x_tasa = float(caus_moneda) if pd.notna(caus_moneda) else 0.0
+                caus_manual = round(float(nominal) * (mfactor_hoy - mfactor_ant) + val_x_tasa, 2)
+                metodo_caus = "CASH"
+            elif pd.notna(vlr_hoy) and pd.notna(vlr_ant):
+                caus_manual = round(float(vlr_hoy) - float(vlr_ant), 2)
+        elif "CTA AHORROS" in especie:
+            # CTA AHORROS: NOMINAL * (FACIAL/100/365)
+            if pd.notna(nominal) and pd.notna(facial) and float(facial) != 0:
+                caus_manual = round(float(nominal) * (float(facial) / 100.0 / 365.0), 2)
+                metodo_caus = "CTA_AHORROS"
+            elif pd.notna(vlr_hoy) and pd.notna(vlr_ant):
+                caus_manual = round(float(vlr_hoy) - float(vlr_ant), 2)
+        else:
+            # General: VLR_MERCADO_T - VLR_MERCADO_Y + INT_DIV
+            if pd.notna(vlr_hoy) and pd.notna(vlr_ant):
+                int_div_val = int_div.get(consec_key, 0.0)
+                caus_manual = round(float(vlr_hoy) - float(vlr_ant) + int_div_val, 2)
+                metodo_caus = "VLR_DIF+INT_DIV" if int_div_val != 0 else "VLR_DIF"
 
         dif_abs = None
         alerta  = False
@@ -1415,21 +1526,25 @@ def verificacion_causacion(
             if portafolio.upper() not in str(r.get("PORTAFOLIO", "")).upper():
                 continue
 
+        int_div_fila = int_div.get(consec_key, 0.0)
+
         resultados.append({
-            "ESPECIE":            str(r.get("ESPECIE",    "")).strip(),
-            "TITULO":             str(r.get("TITULO",     "")).strip(),
-            "ISIN":               str(r.get("ISIN",       "")).strip().upper(),
-            "PORTAFOLIO":         str(r.get("PORTAFOLIO", "")).strip(),
-            "MONEDA":             str(r.get("MONEDA",     "")).strip(),
-            "NOMINAL":            None if pd.isna(r.get("NOMINAL")) else round(float(r.get("NOMINAL")), 2),
-            "VLR_MER_ANT":        None if pd.isna(vlr_ant) else round(float(vlr_ant), 2),
-            "VLR_MER_HOY":        None if pd.isna(vlr_hoy) else round(float(vlr_hoy), 2),
+            "ESPECIE":              especie,
+            "TITULO":               titulo,
+            "ISIN":                 isin,
+            "PORTAFOLIO":           str(r.get("PORTAFOLIO", "")).strip(),
+            "MONEDA":               moneda,
+            "NOMINAL":              None if pd.isna(nominal) else round(float(nominal), 2),
+            "VLR_MER_ANT":          None if pd.isna(vlr_ant)  else round(float(vlr_ant),  2),
+            "VLR_MER_HOY":          None if pd.isna(vlr_hoy)  else round(float(vlr_hoy),  2),
+            "INT_DIV":              round(int_div_fila, 2) if int_div_fila else None,
             "CAUSACION_MER_PORFIN": None if pd.isna(caus_mer) else round(float(caus_mer), 2),
             "CAUSACION_TIR_PORFIN": None if pd.isna(caus_tir) else round(float(caus_tir), 2),
-            "CAUSACION_MANUAL":   caus_manual,
-            "DIF_CAUSACION":      dif_abs,
-            "ALERTA":             alerta,
-            "MOTIVO":             " | ".join(motivos) if motivos else "",
+            "CAUSACION_MANUAL":     caus_manual,
+            "METODO_CAUS":          metodo_caus,
+            "DIF_CAUSACION":        dif_abs,
+            "ALERTA":               alerta,
+            "MOTIVO":               " | ".join(motivos) if motivos else "",
         })
 
     total         = len(resultados)
@@ -1438,13 +1553,143 @@ def verificacion_causacion(
     dif_total     = round(sum(difs), 2) if difs else 0.0
 
     return {
-        "fecha":          fecha,
-        "fecha_anterior": fecha_anterior,
-        "total":          total,
-        "total_alertas":  alertas_count,
+        "fecha":               fecha,
+        "fecha_anterior":      fecha_anterior,
+        "total":               total,
+        "total_alertas":       alertas_count,
         "dif_total_causacion": dif_total,
-        "umbral_abs_usado": umbral_abs,
-        "filas": resultados,
+        "umbral_abs_usado":    umbral_abs,
+        "tiene_583":           not df583.empty,
+        "total_int_div":       round(sum(int_div.values()), 2) if int_div else 0.0,
+        "filas":               resultados,
+    }
+
+
+# ── Operaciones 583 ──────────────────────────────────────────────────────────
+# Archivo 583{yyyymmdd}.csv = Informe de Operaciones (Porfin)
+# Contiene: compras, ventas, cobro intereses, cobro dividendos,
+#           incremento/retiro capital, etc.
+# Se usa para calcular INT_DIV y ajustes de causación manual.
+
+def _find_583(fecha: str = "") -> Optional[Path]:
+    for d in _dirs(fecha):
+        if not d.exists():
+            continue
+        for f in sorted(d.iterdir()):
+            if not f.is_file():
+                continue
+            stem = f.stem.upper()
+            if "583" in stem and f.suffix.upper() in (".CSV", ".TXT"):
+                return f
+    return None
+
+
+def _cargar_583(fecha: str = "") -> pd.DataFrame:
+    path = _find_583(fecha)
+    if not path:
+        return pd.DataFrame()
+    df = _read_porfin_csv(path)
+    if df.empty:
+        return df
+
+    renames = {
+        _col(df, "Especie"):                      "ESPECIE",
+        _col(df, "Transacc", "Transaccion"):      "TRANSACCION",
+        _col(df, "Tipo Oper", "TipoOper"):        "TIPO_OPER",
+        _col(df, "Consec"):                       "CONSEC",
+        _col(df, "Moned"):                        "MONEDA",
+        _col(df, "Val.Operac", "ValOperacion"):   "VAL_OPERACION",
+        _col(df, "Precio Ope", "PrecioOpe"):      "PRECIO_OPE",
+        _col(df, "Vr.Recibido", "VrRecibido"):    "VR_RECIBIDO",
+        _col(df, "Por"):                          "PORTAFOLIO",
+        _col(df, "ISIN"):                         "ISIN",
+    }
+    renames = {k: v for k, v in renames.items() if k and k != v}
+    df = df.rename(columns=renames)
+
+    for c in ["VAL_OPERACION", "PRECIO_OPE", "VR_RECIBIDO"]:
+        if c in df.columns:
+            df[c] = _normalize_num_col(df[c])
+
+    df["ARCHIVO"] = path.name
+    df["_ROW_ID"] = df.index.astype(str)
+    return df.reset_index(drop=True)
+
+
+def _calcular_int_div(df583: pd.DataFrame) -> Dict[str, float]:
+    """Agrega intereses y dividendos cobrados por CONSEC (TITULO).
+    Retorna dict CONSEC → suma VR_RECIBIDO de cobros de interés/dividendo."""
+    if df583.empty or "TRANSACCION" not in df583.columns:
+        return {}
+    mask = df583["TRANSACCION"].str.strip().str.upper().isin(
+        ["COBRO DIVIDENDOS", "COBRO INTERESES", "REINTEGRO CAPITAL"]
+    )
+    sub = df583[mask].copy()
+    if sub.empty or "CONSEC" not in sub.columns:
+        return {}
+    sub["VR_RECIBIDO"] = pd.to_numeric(sub.get("VR_RECIBIDO", pd.Series()), errors="coerce").fillna(0)
+    return sub.groupby("CONSEC")["VR_RECIBIDO"].sum().to_dict()
+
+
+def _calcular_inc_ret_capital(df583: pd.DataFrame) -> Dict[str, float]:
+    """Incrementos y retiros de capital netos por CONSEC."""
+    if df583.empty or "TRANSACCION" not in df583.columns:
+        return {}
+    mask = df583["TRANSACCION"].str.strip().str.upper().isin(
+        ["RETIRO CAPITAL", "INCREMENTO CAPITAL"]
+    )
+    sub = df583[mask].copy()
+    if sub.empty or "CONSEC" not in sub.columns:
+        return {}
+    sub["VR_RECIBIDO"] = pd.to_numeric(sub.get("VR_RECIBIDO", pd.Series()), errors="coerce").fillna(0)
+    sub["_NETO"] = sub.apply(
+        lambda r: -r["VR_RECIBIDO"] if "RETIRO" in str(r["TRANSACCION"]).upper()
+                  else r["VR_RECIBIDO"], axis=1
+    )
+    return sub.groupby("CONSEC")["_NETO"].sum().to_dict()
+
+
+@router.get("/operaciones/{fecha}")
+def operaciones_583(
+    fecha: str,
+    transaccion: Optional[str] = Query(None, description="Filtrar por tipo de transacción"),
+    portafolio: Optional[str] = Query(None),
+    limit: int = Query(1000),
+):
+    """
+    Informe de Operaciones 583: compras, ventas, cobros de interés/dividendo,
+    incremento/retiro capital. Base para ajustes de causación manual.
+    """
+    df = _cargar_583(fecha)
+    if df.empty:
+        return {"error": f"No se encontró 583 para {fecha}", "fecha": fecha, "registros": []}
+
+    if transaccion and "TRANSACCION" in df.columns:
+        df = df[df["TRANSACCION"].str.upper().str.contains(transaccion.upper(), na=False)]
+    if portafolio and "PORTAFOLIO" in df.columns:
+        df = df[df["PORTAFOLIO"].str.upper().str.contains(portafolio.upper(), na=False)]
+
+    # Resúmenes
+    tipos = df["TRANSACCION"].value_counts().to_dict() if "TRANSACCION" in df.columns else {}
+    int_div = _calcular_int_div(df)
+    inc_ret = _calcular_inc_ret_capital(df)
+
+    total_int_div = round(sum(int_div.values()), 2) if int_div else 0.0
+    total_inc_ret = round(sum(inc_ret.values()), 2) if inc_ret else 0.0
+
+    cols = [c for c in [
+        "_ROW_ID", "TRANSACCION", "TIPO_OPER", "CONSEC", "ESPECIE",
+        "ISIN", "MONEDA", "VAL_OPERACION", "PRECIO_OPE", "VR_RECIBIDO", "PORTAFOLIO"
+    ] if c in df.columns]
+
+    return {
+        "fecha":              fecha,
+        "archivo":            df["ARCHIVO"].iloc[0] if "ARCHIVO" in df.columns else "",
+        "total_registros":    len(df),
+        "tipos_transaccion":  tipos,
+        "total_int_div":      total_int_div,
+        "total_inc_ret":      total_inc_ret,
+        "registros":          df[cols].replace({float("nan"): None}).head(limit).to_dict(orient="records"),
     }
 
 

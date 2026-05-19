@@ -531,6 +531,8 @@ tr.obs-row td{background:#e3b34110;}
       <div class="kpi-pill"><div class="kpi-pill-val c-blue" id="kvc-total">—</div><div class="kpi-pill-info"><div class="kpi-pill-label">Posiciones 575</div></div></div>
       <div class="kpi-pill"><div class="kpi-pill-val c-err" id="kvc-alertas">—</div><div class="kpi-pill-info"><div class="kpi-pill-label">Alertas causación</div></div></div>
       <div class="kpi-pill"><div class="kpi-pill-val c-warn" id="kvc-dif-total">—</div><div class="kpi-pill-info"><div class="kpi-pill-label">Dif total causación</div></div></div>
+      <div class="kpi-pill"><div class="kpi-pill-val c-purple" id="kvc-int-div">—</div><div class="kpi-pill-info"><div class="kpi-pill-label">INT/DIV cobrados (583)</div></div></div>
+      <div class="kpi-pill"><div class="kpi-pill-val" id="kvc-583" style="font-size:.8rem;">—</div><div class="kpi-pill-info"><div class="kpi-pill-label">Archivo 583</div></div></div>
     </div>
     <div class="table-wrap" id="wrap-verif-caus-tabla"><div class="empty">Clic en "Calcular verificación"</div></div>
   </div>
@@ -1179,6 +1181,10 @@ async function cargarVerificacion(){
     document.getElementById('kvc-total').textContent=fmt(d2.total);
     document.getElementById('kvc-alertas').textContent=fmt(d2.total_alertas);
     document.getElementById('kvc-dif-total').textContent=fmtN(d2.dif_total_causacion);
+    document.getElementById('kvc-int-div').textContent=fmtN(d2.total_int_div||0);
+    const el583=document.getElementById('kvc-583');
+    el583.textContent=d2.tiene_583?'✓ Disponible':'✗ No encontrado';
+    el583.style.color=d2.tiene_583?'var(--green2)':'var(--muted)';
 
     renderVerifCausTable();
   }catch(e){wc.innerHTML=`<div class="empty">Error causación: ${e.message}</div>`;}
@@ -1187,7 +1193,7 @@ async function cargarVerificacion(){
 function renderVerifTable(){
   const wrap=document.getElementById('wrap-verificacion');
   if(!_verifData.length){wrap.innerHTML='<div class="empty">Sin datos — verifica que Especies.csv esté configurado en Ajustes.</div>';return;}
-  const cols=['ESPECIE','TITULO','ISIN','PORTAFOLIO','TIPO','MONEDA','NOMINAL',
+  const cols=['ESPECIE','TITULO','ISIN','KEYA','PORTAFOLIO','TIPO','MONEDA','NOMINAL',
               'PRECIO_PORFIN','PRECIO_INFOVALMER','FACTOR_MONEDA',
               'VALORACION_PORFIN','VALORACION_MANUAL','DIF_ABS','DIF_PCT','ALERTA','MOTIVO_ALERTA'];
   const show=cols.filter(c=>_verifData.some(r=>r[c]!=null&&r[c]!==''));
@@ -1218,8 +1224,8 @@ function renderVerifCausTable(){
   const wrap=document.getElementById('wrap-verif-caus-tabla');
   if(!_verifCausData.length){wrap.innerHTML='<div class="empty">Sin datos de causación.</div>';return;}
   const cols=['ESPECIE','TITULO','ISIN','PORTAFOLIO','MONEDA','NOMINAL',
-              'VLR_MER_ANT','VLR_MER_HOY','CAUSACION_MER_PORFIN','CAUSACION_TIR_PORFIN',
-              'CAUSACION_MANUAL','DIF_CAUSACION','ALERTA','MOTIVO'];
+              'VLR_MER_ANT','VLR_MER_HOY','INT_DIV','CAUSACION_MER_PORFIN','CAUSACION_TIR_PORFIN',
+              'CAUSACION_MANUAL','METODO_CAUS','DIF_CAUSACION','ALERTA','MOTIVO'];
   const show=cols.filter(c=>_verifCausData.some(r=>r[c]!=null&&r[c]!==''));
   let html=`<table class="data-table"><thead><tr>${show.map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>`;
   for(const r of _verifCausData){
@@ -1232,7 +1238,7 @@ function renderVerifCausTable(){
       if(v==null){cell='<td style="color:var(--muted)">—</td>';}
       else if(c==='ALERTA'){cell=`<td>${v?'<span style="color:var(--red2);font-weight:700">⚠</span>':'<span style="color:var(--green2)">✓</span>'}</td>`;}
       else if(c==='DIF_CAUSACION'&&v!=null){const cl=Math.abs(v)>1000000?'c-err':Math.abs(v)>1000?'c-warn':'';cell=`<td class="${cl}">${fmtN(v)}</td>`;}
-      else if(['NOMINAL','VLR_MER_ANT','VLR_MER_HOY','CAUSACION_MER_PORFIN','CAUSACION_TIR_PORFIN','CAUSACION_MANUAL'].includes(c)&&typeof v==='number'){cell=`<td style="text-align:right">${fmtN(v)}</td>`;}
+      else if(['NOMINAL','VLR_MER_ANT','VLR_MER_HOY','INT_DIV','CAUSACION_MER_PORFIN','CAUSACION_TIR_PORFIN','CAUSACION_MANUAL'].includes(c)&&typeof v==='number'){cell=`<td style="text-align:right">${fmtN(v)}</td>`;}
       else{cell=`<td>${String(v||'').trim()}</td>`;}
       html+=cell;
     }
