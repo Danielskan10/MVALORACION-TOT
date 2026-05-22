@@ -1,4 +1,26 @@
-# Python
+# =============================================================================
+#  MVALORACION — .gitignore
+# =============================================================================
+
+# ── Entornos virtuales ────────────────────────────────────────────────────────
+venv/
+env/
+.venv/
+.env/
+
+# ── Configuración local (contiene rutas y posibles credenciales) ─────────────
+config.yaml
+config.local.yaml
+secrets.yaml
+.env
+*.local.yaml
+
+# ── Datos financieros (nunca subir al repo) ───────────────────────────────────
+data/
+outputs/
+logs/
+
+# ── Python ────────────────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *.pyo
@@ -8,38 +30,44 @@ __pycache__/
 dist/
 build/
 .eggs/
+*.so
 
-# Entornos virtuales
-venv/
-env/
-.env
-.venv
-
-# Jupyter
+# ── Jupyter ───────────────────────────────────────────────────────────────────
 .ipynb_checkpoints/
+*.ipynb
 
-# Salidas generadas por la app
-MVALORACION/
-outputs/
+# ── Archivos generados por la app ─────────────────────────────────────────────
+# Observaciones: se guardan en data/ (ya excluido)
+# Excels exportados
+*.xlsx
+*.xls
+!config.yaml.example
 
-# OS
+# ── OS ────────────────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
 desktop.ini
+ehthumbs.db
 
-# Editores
+# ── Editores ──────────────────────────────────────────────────────────────────
 .vscode/
 .idea/
 *.swp
 *.swo
+*~
 
-# Archivos temporales grandes (drivers, logs)
+# ── Logs ──────────────────────────────────────────────────────────────────────
+*.log
+*.log.*
+
+# ── Archivos corporativos / temporales ────────────────────────────────────────
 chromedriver*
 geckodriver*
-*.log
-
-# Credenciales (nunca subir)
 *.key
 *.pem
-secrets.yaml
-config.local.yaml
+*.crt
+*.pfx
+MVALORACION.bat
+
+# ── Legacy (carpeta de archivos históricos — no forman parte del repo) ────────
+# legacy/  ← descomenta si quieres excluir la carpeta legacy

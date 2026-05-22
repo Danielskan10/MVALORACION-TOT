@@ -364,6 +364,8 @@ tr.obs-row td{background:#e3b34110;}
   <div class="tab" onclick="showTab('tab-errores',this)">🚨 Errores</div>
   <div class="tab" onclick="showTab('tab-portafolios',this)">💼 Portafolios</div>
   <div class="tab" onclick="showTab('tab-monedas',this)">💱 Monedas</div>
+  <div class="tab" onclick="showTab('tab-analisis',this)">📊 Análisis</div>
+  <div class="tab" onclick="showTab('tab-variaciones',this)">📅 Variaciones</div>
 </div>
 
 <!-- ALERTAS BANNER -->
@@ -419,13 +421,17 @@ tr.obs-row td{background:#e3b34110;}
 <!-- ── TAB: FONDOS ── -->
 <div class="tab-panel" id="tab-fondos">
   <div id="kpi-fondos-row" style="display:grid;grid-template-columns:repeat(4,1fr);gap:.5rem;margin-bottom:.75rem;"></div>
-  <div class="chart-grid-2">
+  <div class="chart-grid-3">
     <div class="card">
-      <div class="card-title">🏦 Fondos por valor mercado (575) — top 15</div>
+      <div class="card-title">🏦 Fondos por valor mercado — top 15</div>
       <div id="chart-fondos" style="height:300px;"></div>
     </div>
     <div class="card">
-      <div class="card-title">💱 Por moneda (575)</div>
+      <div class="card-title">📊 Causación: Mercado vs TIR (top 12)</div>
+      <div id="chart-caus-mer-tir" style="height:300px;"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">💱 Por moneda normalizada</div>
       <div id="chart-mon-fondos" style="height:300px;"></div>
     </div>
   </div>
@@ -501,6 +507,16 @@ tr.obs-row td{background:#e3b34110;}
     <div class="kpi-pill"><div class="kpi-pill-val c-purple" id="ops-incret">—</div><div class="kpi-pill-info"><div class="kpi-pill-label">Inc/Ret Capital neto</div></div></div>
     <div class="kpi-pill"><div class="kpi-pill-val" id="ops-archivo" style="font-size:.75rem;">—</div><div class="kpi-pill-info"><div class="kpi-pill-label">Archivo</div></div></div>
   </div>
+  <div class="chart-grid-2" id="charts-ops-row" style="margin-bottom:.75rem;display:none;">
+    <div class="card">
+      <div class="card-title">📦 Operaciones por tipo (conteo)</div>
+      <div id="chart-ops-tipo" style="height:200px;"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">💰 Valor recibido por tipo</div>
+      <div id="chart-ops-valor" style="height:200px;"></div>
+    </div>
+  </div>
   <div class="filter-bar">
     <input type="text" id="fil-busq-ops" placeholder="ISIN / Especie / Consec..." oninput="renderOps()" style="width:220px;"/>
     <select id="fil-tipo-ops" onchange="renderOps()"><option value="">Todos los tipos</option></select>
@@ -513,6 +529,20 @@ tr.obs-row td{background:#e3b34110;}
 
 <!-- ── TAB: ERRORES ── -->
 <div class="tab-panel" id="tab-errores">
+  <div class="chart-grid-3" style="margin-bottom:.75rem;">
+    <div class="card">
+      <div class="card-title">🔴 Por severidad</div>
+      <div id="chart-err-sev" style="height:180px;"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">🏷️ Por tipo de error</div>
+      <div id="chart-err-tipo" style="height:180px;"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">💼 Por portafolio (top 10)</div>
+      <div id="chart-err-port" style="height:180px;"></div>
+    </div>
+  </div>
   <div class="filter-bar">
     <select id="fil-severidad" onchange="renderErrores()">
       <option value="">Todas las severidades</option>
@@ -534,12 +564,119 @@ tr.obs-row td{background:#e3b34110;}
 
 <!-- ── TAB: PORTAFOLIOS ── -->
 <div class="tab-panel" id="tab-portafolios">
+  <div class="chart-grid-2" style="margin-bottom:.75rem;">
+    <div class="card">
+      <div class="card-title">💼 Valor mercado por portafolio</div>
+      <div id="chart-port-bar" style="height:280px;"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">📐 Composición % portafolio</div>
+      <div id="chart-port-pie" style="height:280px;"></div>
+    </div>
+  </div>
   <div class="table-wrap" id="wrap-portafolios"><div class="empty"><span class="spinner"></span></div></div>
 </div>
 
 <!-- ── TAB: MONEDAS ── -->
 <div class="tab-panel" id="tab-monedas">
+  <div class="chart-grid-2" style="margin-bottom:.75rem;">
+    <div class="card">
+      <div class="card-title">💱 Valor mercado por moneda</div>
+      <div id="chart-mon-bar" style="height:240px;"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">📊 Distribución posiciones por moneda</div>
+      <div id="chart-mon-pos" style="height:240px;"></div>
+    </div>
+  </div>
   <div class="table-wrap" id="wrap-monedas-596"><div class="empty"><span class="spinner"></span></div></div>
+</div>
+
+<!-- ── TAB: ANÁLISIS ── -->
+<div class="tab-panel" id="tab-analisis">
+  <div class="banner info" style="margin-bottom:.75rem;">
+    📊 <strong>Análisis de portafolio</strong> — Scatter precio vs TIR, distribución de valores, composición por clase y análisis de concentración. Los datos se toman del 596 cargado.
+  </div>
+  <div class="chart-grid-3" style="margin-bottom:.75rem;">
+    <div class="card">
+      <div class="card-title">🎯 Precio vs TIR (scatter)</div>
+      <div id="chart-scatter-ptir" style="height:260px;"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">📊 Distribución valor mercado (histograma)</div>
+      <div id="chart-hist-vlr" style="height:260px;"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">🏷️ Por clase de título</div>
+      <div id="chart-clase" style="height:260px;"></div>
+    </div>
+  </div>
+  <div class="chart-grid-2" style="margin-bottom:.75rem;">
+    <div class="card">
+      <div class="card-title">📈 Valor mercado vs Nominal (top 30)</div>
+      <div id="chart-vlr-vs-nom" style="height:280px;"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">⏳ Distribución por vencimiento</div>
+      <div id="chart-vcto-dist" style="height:280px;"></div>
+    </div>
+  </div>
+  <div class="chart-grid-2">
+    <div class="card">
+      <div class="card-title">🔵 Concentración top-10 posiciones (% del total)</div>
+      <div id="chart-concentracion" style="height:240px;"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">📉 Distribución de TIR por tipo</div>
+      <div id="chart-tir-box" style="height:240px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── TAB: VARIACIONES ── -->
+<div class="tab-panel" id="tab-variaciones">
+  <div class="banner info" style="margin-bottom:.75rem;">
+    📅 <strong>Variaciones entre fechas</strong> — Compara valoración del 596 entre dos fechas. Detecta cambios anormales (&gt;umbral%).
+  </div>
+  <div style="display:flex;gap:.65rem;align-items:flex-end;flex-wrap:wrap;margin-bottom:.75rem;background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:.75rem 1rem;">
+    <div class="tb-group">
+      <label>Fecha inicio</label>
+      <select id="var-fecha-i" style="background:var(--surface2);border:1px solid var(--border2);color:var(--text);padding:.32rem .65rem;border-radius:var(--radius);font-size:.78rem;font-family:inherit;"></select>
+    </div>
+    <div class="tb-group">
+      <label>Fecha fin</label>
+      <select id="var-fecha-f" style="background:var(--surface2);border:1px solid var(--border2);color:var(--text);padding:.32rem .65rem;border-radius:var(--radius);font-size:.78rem;font-family:inherit;"></select>
+    </div>
+    <div class="tb-group">
+      <label>Umbral variación %</label>
+      <input type="number" id="var-umbral" value="5" step="0.5" min="0" style="width:80px;background:var(--surface2);border:1px solid var(--border2);color:var(--text);padding:.32rem .5rem;border-radius:var(--radius);font-size:.78rem;"/>
+    </div>
+    <button class="btn" onclick="cargarVariaciones()">📅 Calcular variaciones</button>
+    <button class="btn btn-ghost btn-sm" onclick="exportarVariacionesCSV()">⬇ CSV</button>
+  </div>
+  <div id="kpi-variaciones-row" style="display:flex;gap:.6rem;flex-wrap:wrap;margin-bottom:.75rem;"></div>
+  <div class="chart-grid-2" style="margin-bottom:.75rem;">
+    <div class="card">
+      <div class="card-title">📊 Top variaciones absolutas (COP)</div>
+      <div id="chart-var-abs" style="height:300px;"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">📈 Top variaciones % (anormales en rojo)</div>
+      <div id="chart-var-pct" style="height:300px;"></div>
+    </div>
+  </div>
+  <div class="card" style="margin-bottom:.75rem;">
+    <div class="card-title">🔴 Distribución de variaciones %</div>
+    <div id="chart-var-hist" style="height:200px;"></div>
+  </div>
+  <div class="filter-bar">
+    <label style="display:flex;align-items:center;gap:.3rem;cursor:pointer;font-size:.75rem;color:var(--muted2);">
+      <input type="checkbox" id="var-solo-anormal" onchange="renderVariaciones()"> Solo anormales
+    </label>
+    <input type="text" id="var-busq" placeholder="ISIN / especie..." oninput="renderVariaciones()" style="width:200px;background:var(--surface2);border:1px solid var(--border2);color:var(--text);padding:.3rem .6rem;border-radius:var(--radius);font-size:.75rem;"/>
+    <span id="count-variaciones" style="color:var(--muted);font-size:.75rem;"></span>
+  </div>
+  <div class="table-wrap" id="wrap-variaciones"><div class="empty">Selecciona dos fechas y haz clic en "Calcular variaciones"</div></div>
 </div>
 
 <!-- ── TAB: VERIFICACIÓN ── -->
@@ -574,6 +711,21 @@ tr.obs-row td{background:#e3b34110;}
     </label>
     <button class="btn" onclick="cargarVerificacion()" style="margin-top:.9rem;">🔬 Calcular verificación</button>
     <button class="btn btn-ghost btn-sm" onclick="exportarVerifCSV()" style="margin-top:.9rem;">⬇ CSV</button>
+  </div>
+  <!-- Gráficas verificación -->
+  <div class="chart-grid-3" id="charts-verif-row" style="margin-bottom:.75rem;display:none;">
+    <div class="card">
+      <div class="card-title">🎯 Distribución diferencias % valoración</div>
+      <div id="chart-verif-hist" style="height:200px;"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">📊 Porfin vs Manual (top alertas)</div>
+      <div id="chart-verif-scatter" style="height:200px;"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">🏷️ Alertas por tipo activo</div>
+      <div id="chart-verif-tipo" style="height:200px;"></div>
+    </div>
   </div>
   <!-- Subtabs valoración / causación -->
   <div class="subtab-bar" style="margin-bottom:.75rem;">
@@ -644,7 +796,7 @@ let _up596=null,_up575=null,_up583=null;
 function debounce(fn,ms){let t;return(...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms);};}
 async function fetchJSON(u){const r=await fetch(API+u);if(!r.ok)throw new Error(`${r.status}`);return r.json();}
 function fmt(n,d=0){if(n==null||isNaN(n))return'—';const a=Math.abs(n);if(a>=1e12)return(n/1e12).toFixed(1)+' T';if(a>=1e9)return(n/1e9).toFixed(1)+' MM';if(a>=1e6)return(n/1e6).toFixed(1)+' M';return Number(n).toLocaleString('es-CO',{minimumFractionDigits:d,maximumFractionDigits:d});}
-function fmtN(n,d=6){return n==null||isNaN(n)?'—':Number(n).toFixed(d);}
+function fmtN(n,d=2){if(n==null||n===undefined||n==='')return'—';const x=parseFloat(n);if(isNaN(x))return String(n);if(d>2)return x.toFixed(d);return x.toLocaleString('es-CO',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function nc(n){return n==null?'':n>=0?'n-pos':'n-neg';}
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function setKpi(id,val,cls){const el=document.getElementById(id);if(!el)return;el.textContent=val;if(cls)el.parentElement.className='kpi '+cls;}
@@ -658,10 +810,18 @@ function showTab(id,el){
   if(id==='tab-causaciones'&&_causData&&document.getElementById('wrap-causaciones').innerHTML.includes('spinner'))renderCausaciones();
   if(id==='tab-fondos'&&!_fondosData)cargarFondos();
   if(id==='tab-tir'&&!_tirData596)cargarTir();
-  if(id==='tab-errores'&&_erroresData&&document.getElementById('wrap-errores').innerHTML.includes('spinner'))renderErrores();
+  if(id==='tab-errores'){if(_erroresData&&document.getElementById('wrap-errores').innerHTML.includes('spinner'))renderErrores();if(_erroresData)_renderErrorCharts();}
   if(id==='tab-portafolios'&&document.getElementById('wrap-portafolios').innerHTML.includes('spinner'))cargarPortafolios();
   if(id==='tab-monedas'&&document.getElementById('wrap-monedas-596').innerHTML.includes('spinner'))cargarMonedasTab();
   if(id==='tab-operaciones'&&!_ops583Data.length)cargarOps583();
+  if(id==='tab-analisis')renderAnalisis();
+  if(id==='tab-variaciones'){
+    const fi=document.getElementById('var-fecha-i');
+    const ff=document.getElementById('var-fecha-f');
+    if(fi&&!fi.options.length){
+      fetchJSON('/api/porfin/fechas').then(d=>poblarSelectsVariaciones((d.fechas||[]).slice().reverse())).catch(()=>{});
+    }
+  }
 }
 
 // ── UPLOAD ───────────────────────────────────────────────────────────────────
@@ -709,6 +869,7 @@ async function cargarFechas(){
     const d=await fetchJSON('/api/porfin/fechas');
     const fechas=(d.fechas||[]).slice().reverse();
     sel.innerHTML=fechas.map(f=>`<option value="${f}">${f.slice(0,4)}-${f.slice(4,6)}-${f.slice(6)}</option>`).join('');
+    poblarSelectsVariaciones(fechas);
     if(fechas.length)cargarTodo();
   }catch(e){sel.innerHTML='<option value="">Error</option>';}
 }
@@ -954,39 +1115,7 @@ function renderErrores(){
   wrap.innerHTML=html;
 }
 
-// ── PORTAFOLIOS ────────────────────────────────────────────────────────────────
-async function cargarPortafolios(){
-  const fecha=document.getElementById('sel-fecha').value;
-  try{
-    const rows=await fetchJSON(`/api/porfin/portafolios/${fecha}`);
-    const wrap=document.getElementById('wrap-portafolios');
-    if(!rows.length){wrap.innerHTML='<div class="empty">Sin datos</div>';return;}
-    const total=rows.reduce((s,r)=>s+(r.valor_mercado||0),0);
-    let html='<table><thead><tr><th>Portafolio</th><th>Posiciones</th><th>Valor Mercado</th><th>%</th></tr></thead><tbody>';
-    for(const r of rows){
-      const pct=total?((r.valor_mercado/total)*100).toFixed(1):'—';
-      html+=`<tr><td><strong>${r.PORTAFOLIO||r.portafolio||'—'}</strong></td><td>${(r.posiciones||0).toLocaleString()}</td>
-        <td class="${nc(r.valor_mercado)}">${fmt(r.valor_mercado,2)}</td>
-        <td style="color:var(--muted)">${pct}%</td></tr>`;
-    }
-    html+=`<tr style="font-weight:700;border-top:2px solid var(--border2);background:var(--surface2);"><td colspan="2">TOTAL</td><td class="${nc(total)}">${fmt(total,2)}</td><td>100%</td></tr>`;
-    html+='</tbody></table>';
-    wrap.innerHTML=html;
-  }catch(e){document.getElementById('wrap-portafolios').innerHTML=`<div class="empty">Error: ${e.message}</div>`;}
-}
-
-async function cargarMonedasTab(){
-  const fecha=document.getElementById('sel-fecha').value;
-  try{
-    const rows=await fetchJSON(`/api/porfin/monedas/${fecha}`);
-    const wrap=document.getElementById('wrap-monedas-596');
-    if(!rows.length){wrap.innerHTML='<div class="empty">Sin datos</div>';return;}
-    let html='<table><thead><tr><th>Moneda</th><th>Posiciones</th><th>Valor Mercado COP</th></tr></thead><tbody>';
-    for(const r of rows)html+=`<tr><td><strong>${r.MONEDA||'—'}</strong></td><td>${(r.posiciones||0).toLocaleString()}</td><td class="${nc(r.valor_mercado)}">${fmt(r.valor_mercado,2)}</td></tr>`;
-    html+='</tbody></table>';
-    wrap.innerHTML=html;
-  }catch(e){}
-}
+// ── PORTAFOLIOS y MONEDAS se definen más abajo (versión con gráficas) ──────────
 
 // ── FONDOS ────────────────────────────────────────────────────────────────────
 async function cargarFondos(){
@@ -1014,6 +1143,7 @@ async function cargarFondos(){
       <div style="font-size:.65rem;color:var(--muted);text-transform:uppercase;margin-bottom:.25rem;">${l}</div>
       <div style="font-size:1.1rem;font-weight:700;color:${c}">${v}</div>
     </div>`).join('');
+    _renderFondoCausChart();
     const monData=await fetchJSON(`/api/porfin/monedas_fondos/${fecha}`);
     if(monData.length){
       Plotly.newPlot('chart-mon-fondos',[{type:'pie',labels:monData.map(m=>m.MON_NORM),values:monData.map(m=>Math.abs(m.vlr_hoy)),
@@ -1266,6 +1396,7 @@ async function cargarVerificacion(){
     else{badge.style.display='none';}
 
     renderVerifTable();
+    _renderVerifCharts();
   }catch(e){wv.innerHTML=`<div class="empty">Error: ${e.message}</div>`;}
 
   // Verificación causación
@@ -1361,12 +1492,7 @@ function exportarVerifCSV(){
   a.download=`verificacion_${_verifSubtab}_${document.getElementById('sel-fecha').value}.csv`;a.click();
 }
 
-function fmtN(v){
-  if(v==null||v===undefined||v==='')return '—';
-  const n=parseFloat(v);
-  if(isNaN(n))return v;
-  return n.toLocaleString('es-CO',{minimumFractionDigits:2,maximumFractionDigits:2});
-}
+// fmtN definida arriba (versión unificada)
 
 // ── OPERACIONES 583 ───────────────────────────────────────────────────────────
 let _ops583Data=[], _ops583Raw=null;
@@ -1401,6 +1527,7 @@ async function cargarOps583(){
       Object.keys(tipos).sort().map(t=>`<option value="${t}">${t} (${tipos[t]})</option>`).join('');
 
     renderOps();
+    _renderOpsCharts();
   }catch(e){
     wrap.innerHTML=`<div class="empty">Sin archivo 583 para ${fecha}. Cárgalo en ⬆ Cargar.</div>`;
   }
@@ -1453,6 +1580,380 @@ function exportarOpsCSV(){
   const a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));
   a.download=`operaciones_583_${document.getElementById('sel-fecha').value}.csv`;a.click();
+}
+
+// ── PORTAFOLIOS (mejorado con gráficas) ───────────────────────────────────────
+async function cargarPortafolios(){
+  const fecha=document.getElementById('sel-fecha').value;
+  try{
+    const rows=await fetchJSON(`/api/porfin/portafolios/${fecha}`);
+    const wrap=document.getElementById('wrap-portafolios');
+    if(!rows.length){wrap.innerHTML='<div class="empty">Sin datos</div>';return;}
+    const total=rows.reduce((s,r)=>s+(r.valor_mercado||0),0);
+    // Gráficas
+    const names=(rows.map(r=>r.PORTAFOLIO||r.portafolio||'—')).reverse();
+    const vals=rows.map(r=>r.valor_mercado||0).reverse();
+    Plotly.newPlot('chart-port-bar',[{
+      type:'bar',orientation:'h',x:vals,y:names,
+      marker:{color:vals.map(v=>v<0?'#f85149':'#1f6feb')},
+      text:vals.map(v=>fmt(v)),textposition:'outside',
+    }],{...PL,margin:{t:5,b:20,l:70,r:80},xaxis:{...PL.xaxis,tickformat:',.2s'}},{responsive:true,displayModeBar:false});
+    const posNames=rows.map(r=>r.PORTAFOLIO||r.portafolio||'—');
+    const posVals=rows.map(r=>r.posiciones||0);
+    const colors=['#1f6feb','#3fb950','#e3b341','#f85149','#bc8cff','#58a6ff','#f0883e','#8b949e','#39d353','#f78166','#d2a8ff','#ffa657'];
+    Plotly.newPlot('chart-port-pie',[{
+      type:'pie',labels:posNames,values:rows.map(r=>Math.abs(r.valor_mercado||0)),
+      hole:.35,textinfo:'label+percent',marker:{colors},
+      hovertemplate:'<b>%{label}</b><br>%{percent}<br>Valor: %{value:,.0f}<extra></extra>',
+    }],{...PL,margin:{t:5,b:5,l:5,r:5}},{responsive:true,displayModeBar:false});
+    // Tabla
+    let html='<table><thead><tr><th>Portafolio</th><th>Posiciones</th><th>Valor Mercado</th><th>%</th><th>Barra</th></tr></thead><tbody>';
+    const maxV=Math.max(...rows.map(r=>Math.abs(r.valor_mercado||0)));
+    for(const r of rows){
+      const portKey=r.PORTAFOLIO||r.portafolio||'—';
+      const pct=total?((r.valor_mercado/total)*100):0;
+      const barW=maxV?(Math.abs(r.valor_mercado)/maxV*100).toFixed(1):0;
+      html+=`<tr>
+        <td><strong>${portKey}</strong></td>
+        <td>${(r.posiciones||0).toLocaleString()}</td>
+        <td class="${nc(r.valor_mercado)}">${fmt(r.valor_mercado,2)}</td>
+        <td style="color:var(--muted)">${pct.toFixed(1)}%</td>
+        <td style="min-width:120px;"><div style="background:var(--border2);border-radius:2px;height:6px;"><div style="width:${barW}%;height:100%;background:${r.valor_mercado<0?'var(--red2)':'var(--blue2)'};border-radius:2px;"></div></div></td>
+      </tr>`;
+    }
+    html+=`<tr style="font-weight:700;border-top:2px solid var(--border2);background:var(--surface2);">
+      <td>TOTAL (${rows.length})</td><td>${rows.reduce((s,r)=>s+(r.posiciones||0),0).toLocaleString()}</td>
+      <td class="${nc(total)}">${fmt(total,2)}</td><td>100%</td><td></td></tr>`;
+    html+='</tbody></table>';
+    wrap.innerHTML=html;
+  }catch(e){document.getElementById('wrap-portafolios').innerHTML=`<div class="empty">Error: ${e.message}</div>`;}
+}
+
+async function cargarMonedasTab(){
+  const fecha=document.getElementById('sel-fecha').value;
+  try{
+    const rows=await fetchJSON(`/api/porfin/monedas/${fecha}`);
+    const wrap=document.getElementById('wrap-monedas-596');
+    if(!rows.length){wrap.innerHTML='<div class="empty">Sin datos</div>';return;}
+    const names=rows.map(r=>r.MONEDA||'—');
+    const vals=rows.map(r=>r.valor_mercado||0);
+    const posArr=rows.map(r=>r.posiciones||0);
+    const colors=['#1f6feb','#3fb950','#e3b341','#f85149','#bc8cff','#58a6ff','#f0883e','#8b949e'];
+    Plotly.newPlot('chart-mon-bar',[{
+      type:'bar',x:names,y:vals,
+      marker:{color:colors},
+      text:vals.map(v=>fmt(v)),textposition:'outside',
+    }],{...PL,margin:{t:20,b:30,l:60,r:15},yaxis:{...PL.yaxis,tickformat:',.2s'}},{responsive:true,displayModeBar:false});
+    Plotly.newPlot('chart-mon-pos',[{
+      type:'bar',x:names,y:posArr,
+      marker:{color:colors.map((c,i)=>c)},
+      text:posArr.map(v=>v.toLocaleString()),textposition:'outside',
+    }],{...PL,margin:{t:20,b:30,l:45,r:15}},{responsive:true,displayModeBar:false});
+    const total=rows.reduce((s,r)=>s+(r.valor_mercado||0),0);
+    let html='<table><thead><tr><th>Moneda</th><th>Posiciones</th><th>Valor Mercado COP</th><th>%</th></tr></thead><tbody>';
+    for(const r of rows){
+      const pct=total?((r.valor_mercado/total)*100).toFixed(1):'—';
+      html+=`<tr><td><strong>${r.MONEDA||'—'}</strong></td><td>${(r.posiciones||0).toLocaleString()}</td><td class="${nc(r.valor_mercado)}">${fmt(r.valor_mercado,2)}</td><td style="color:var(--muted)">${pct}%</td></tr>`;
+    }
+    html+='</tbody></table>';
+    wrap.innerHTML=html;
+  }catch(e){}
+}
+
+// ── TAB ANÁLISIS ──────────────────────────────────────────────────────────────
+function renderAnalisis(){
+  const rows=_posData;
+  if(!rows||!rows.length){
+    ['chart-scatter-ptir','chart-hist-vlr','chart-clase','chart-vlr-vs-nom','chart-vcto-dist','chart-concentracion','chart-tir-box']
+      .forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML='<div class="empty">Carga datos primero</div>';});
+    return;
+  }
+  const PL2=_PL();
+
+  // Scatter precio vs TIR
+  const withPT=rows.filter(r=>r.PRECIO!=null&&r.TIR!=null);
+  if(withPT.length){
+    const byPort={};
+    withPT.forEach(r=>{const p=r.PORTAFOLIO||'Otros';if(!byPort[p])byPort[p]={x:[],y:[],text:[]};byPort[p].x.push(r.PRECIO);byPort[p].y.push(r.TIR);byPort[p].text.push(r.ISIN||r.ESPECIE||'');});
+    const colors=['#1f6feb','#3fb950','#e3b341','#f85149','#bc8cff','#58a6ff','#f0883e','#8b949e'];
+    const traces=Object.entries(byPort).slice(0,8).map(([name,d],i)=>({
+      type:'scatter',mode:'markers',name,x:d.x,y:d.y,text:d.text,
+      marker:{color:colors[i%colors.length],size:5,opacity:.75},
+      hovertemplate:'<b>%{text}</b><br>Precio: %{x:.4f}<br>TIR: %{y:.4f}<extra></extra>',
+    }));
+    Plotly.newPlot('chart-scatter-ptir',traces,{...PL2,showlegend:true,legend:{font:{size:8}},margin:{t:5,b:35,l:50,r:10},xaxis:{...PL2.xaxis,title:{text:'Precio',font:{size:9}}},yaxis:{...PL2.yaxis,title:{text:'TIR',font:{size:9}}}},{responsive:true,displayModeBar:false});
+  }
+
+  // Histograma valor mercado
+  const vals=rows.filter(r=>r.VLR_MERCADO!=null&&r.VLR_MERCADO>0).map(r=>r.VLR_MERCADO);
+  if(vals.length){
+    Plotly.newPlot('chart-hist-vlr',[{type:'histogram',x:vals,nbinsx:30,marker:{color:'#1f6feb',opacity:.8},hovertemplate:'%{x:,.0f}<br>%{y} posiciones<extra></extra>'}],
+      {...PL2,margin:{t:5,b:35,l:55,r:10},xaxis:{...PL2.xaxis,tickformat:',.2s'},yaxis:{...PL2.yaxis,title:{text:'Posiciones',font:{size:9}}}},{responsive:true,displayModeBar:false});
+  }
+
+  // Por clase
+  const clases={};
+  rows.forEach(r=>{const c=String(r.CLASE||'Sin clase').trim();clases[c]=(clases[c]||0)+1;});
+  if(Object.keys(clases).length){
+    Plotly.newPlot('chart-clase',[{type:'pie',labels:Object.keys(clases),values:Object.values(clases),hole:.4,
+      marker:{colors:['#1f6feb','#3fb950','#e3b341','#f85149','#bc8cff']},textinfo:'label+percent'}],
+      {...PL2,margin:{t:5,b:5,l:5,r:5}},{responsive:true,displayModeBar:false});
+  }
+
+  // Vlr mercado vs nominal (top 30 por VLR_MERCADO)
+  const top30=rows.filter(r=>r.VLR_MERCADO!=null&&r.NOMINAL!=null).sort((a,b)=>Math.abs(b.VLR_MERCADO)-Math.abs(a.VLR_MERCADO)).slice(0,30);
+  if(top30.length){
+    const labels=top30.map(r=>(r.ISIN||r.ESPECIE||'?').slice(0,10));
+    Plotly.newPlot('chart-vlr-vs-nom',[
+      {type:'bar',name:'Vlr Mercado',x:labels,y:top30.map(r=>r.VLR_MERCADO),marker:{color:'#1f6feb'}},
+      {type:'bar',name:'Nominal',x:labels,y:top30.map(r=>r.NOMINAL),marker:{color:'#3fb950',opacity:.7}},
+    ],{...PL2,barmode:'group',margin:{t:5,b:50,l:60,r:10},xaxis:{...PL2.xaxis,tickangle:-45,tickfont:{size:7}},yaxis:{...PL2.yaxis,tickformat:',.2s'}},{responsive:true,displayModeBar:false});
+  }
+
+  // Distribución por vencimiento (año)
+  const vctoMap={};
+  rows.forEach(r=>{
+    const v=String(r.VCTO||'').trim();
+    let yr='Sin vcto';
+    const m=v.match(/(\d{4})/);if(m)yr=m[1];
+    vctoMap[yr]=(vctoMap[yr]||0)+(r.VLR_MERCADO||0);
+  });
+  const vctoSorted=Object.entries(vctoMap).sort((a,b)=>a[0].localeCompare(b[0]));
+  if(vctoSorted.length){
+    Plotly.newPlot('chart-vcto-dist',[{
+      type:'bar',x:vctoSorted.map(e=>e[0]),y:vctoSorted.map(e=>e[1]),
+      marker:{color:'#bc8cff'},hovertemplate:'%{x}<br>%{y:,.0f}<extra></extra>',
+    }],{...PL2,margin:{t:5,b:35,l:60,r:10},xaxis:{...PL2.xaxis,tickangle:-45},yaxis:{...PL2.yaxis,tickformat:',.2s'}},{responsive:true,displayModeBar:false});
+  }
+
+  // Concentración top-10 (% del total)
+  const withVal=rows.filter(r=>r.VLR_MERCADO>0).sort((a,b)=>b.VLR_MERCADO-a.VLR_MERCADO);
+  const totalVlr=withVal.reduce((s,r)=>s+r.VLR_MERCADO,0);
+  const top10=withVal.slice(0,10);
+  const top10Pct=top10.reduce((s,r)=>s+r.VLR_MERCADO,0)/totalVlr*100;
+  const rest=100-top10Pct;
+  Plotly.newPlot('chart-concentracion',[{
+    type:'pie',labels:[...top10.map(r=>(r.ISIN||r.ESPECIE||'?').slice(0,12)),'Resto'],
+    values:[...top10.map(r=>r.VLR_MERCADO),withVal.slice(10).reduce((s,r)=>s+r.VLR_MERCADO,0)],
+    hole:.45,textinfo:'label+percent',
+    marker:{colors:['#f85149','#f0883e','#e3b341','#3fb950','#58a6ff','#1f6feb','#bc8cff','#8b949e','#39d353','#f78166','#cccccc']},
+  }],{...PL2,margin:{t:5,b:5,l:5,r:5}},{responsive:true,displayModeBar:false});
+
+  // Box TIR por portafolio (top 6)
+  const ports=[...new Set(rows.filter(r=>r.TIR!=null).map(r=>r.PORTAFOLIO||'—'))].slice(0,6);
+  if(ports.length){
+    const boxTraces=ports.map((p,i)=>{
+      const tirs=rows.filter(r=>(r.PORTAFOLIO||'—')===p&&r.TIR!=null).map(r=>r.TIR);
+      return{type:'box',name:p,y:tirs,marker:{color:['#1f6feb','#3fb950','#e3b341','#f85149','#bc8cff','#58a6ff'][i%6]},boxmean:true};
+    });
+    Plotly.newPlot('chart-tir-box',boxTraces,{...PL2,margin:{t:5,b:45,l:45,r:10},xaxis:{...PL2.xaxis,tickangle:-30,tickfont:{size:7}},showlegend:false},{responsive:true,displayModeBar:false});
+  }
+}
+
+// ── TAB VARIACIONES ───────────────────────────────────────────────────────────
+let _variacionesData=[];
+
+function poblarSelectsVariaciones(fechas){
+  const fi=document.getElementById('var-fecha-i');
+  const ff=document.getElementById('var-fecha-f');
+  if(!fi||!ff||!fechas.length)return;
+  const opts=fechas.map(f=>`<option value="${f}">${f.slice(0,4)}-${f.slice(4,6)}-${f.slice(6)}</option>`).join('');
+  fi.innerHTML=opts;
+  ff.innerHTML=opts;
+  if(fechas.length>1){fi.value=fechas[fechas.length-2];ff.value=fechas[fechas.length-1];}
+  else{fi.value=fechas[0];ff.value=fechas[0];}
+}
+
+async function cargarVariaciones(){
+  const fi=document.getElementById('var-fecha-i').value;
+  const ff=document.getElementById('var-fecha-f').value;
+  const umbral=parseFloat(document.getElementById('var-umbral').value)||5;
+  if(!fi||!ff){alert('Selecciona las dos fechas.');return;}
+  const wrap=document.getElementById('wrap-variaciones');
+  wrap.innerHTML='<div class="empty"><span class="spinner"></span> Calculando variaciones…</div>';
+  try{
+    _variacionesData=await fetchJSON(`/api/porfin/variaciones/${fi}/${ff}?umbral=${umbral}`);
+    // KPIs
+    const total=_variacionesData.length;
+    const anorm=_variacionesData.filter(r=>r.ANORMAL).length;
+    const sumA=_variacionesData.filter(r=>r.ANORMAL).reduce((s,r)=>s+Math.abs(r.VAR_ABS||0),0);
+    document.getElementById('kpi-variaciones-row').innerHTML=[
+      ['Total posiciones',fmt(total),'c-blue'],
+      ['Variaciones anormales',fmt(anorm),'c-err'],
+      ['% anormales',total?(anorm/total*100).toFixed(1)+'%':'—','c-warn'],
+      ['Σ Var. abs. anormales',fmt(sumA),'c-purple'],
+    ].map(([l,v,c])=>`<div class="kpi-pill"><div class="kpi-pill-val ${c}">${v}</div><div class="kpi-pill-info"><div class="kpi-pill-label">${l}</div></div></div>`).join('');
+
+    // Gráfica barras: top 15 var abs
+    const top15abs=[..._variacionesData].sort((a,b)=>Math.abs(b.VAR_ABS||0)-Math.abs(a.VAR_ABS||0)).slice(0,15);
+    const labsAbs=top15abs.map(r=>(r.ISIN||r.ESPECIE||'?').slice(0,12)).reverse();
+    const valsAbs=top15abs.map(r=>r.VAR_ABS||0).reverse();
+    Plotly.newPlot('chart-var-abs',[{
+      type:'bar',orientation:'h',x:valsAbs,y:labsAbs,
+      marker:{color:valsAbs.map(v=>v<0?'#f85149':'#3fb950')},
+      hovertemplate:'%{y}<br>%{x:,.0f}<extra></extra>',
+    }],{...PL,margin:{t:5,b:20,l:80,r:20},xaxis:{...PL.xaxis,tickformat:',.2s'}},{responsive:true,displayModeBar:false});
+
+    // Gráfica barras: top 15 var pct
+    const top15pct=[..._variacionesData].sort((a,b)=>Math.abs(b.VAR_PCT||0)-Math.abs(a.VAR_PCT||0)).slice(0,15);
+    const labsPct=top15pct.map(r=>(r.ISIN||r.ESPECIE||'?').slice(0,12)).reverse();
+    const valsPct=top15pct.map(r=>r.VAR_PCT||0).reverse();
+    const anormPct=top15pct.map(r=>r.ANORMAL).reverse();
+    Plotly.newPlot('chart-var-pct',[{
+      type:'bar',orientation:'h',x:valsPct,y:labsPct,
+      marker:{color:valsPct.map((v,i)=>anormPct[i]?'#f85149':v<0?'#f0883e':'#3fb950')},
+      hovertemplate:'%{y}<br>%{x:.2f}%<extra></extra>',
+    }],{...PL,margin:{t:5,b:20,l:80,r:20}},{responsive:true,displayModeBar:false});
+
+    // Histograma de variaciones %
+    const allPct=_variacionesData.filter(r=>r.VAR_PCT!=null).map(r=>r.VAR_PCT);
+    if(allPct.length){
+      Plotly.newPlot('chart-var-hist',[{
+        type:'histogram',x:allPct,nbinsx:40,
+        marker:{color:'#58a6ff',opacity:.8},
+        hovertemplate:'%{x:.1f}%<br>%{y} posiciones<extra></extra>',
+      }],{...PL,margin:{t:5,b:35,l:45,r:10},xaxis:{...PL.xaxis,title:{text:'Variación %',font:{size:9}}},yaxis:{...PL.yaxis,title:{text:'Posiciones',font:{size:9}}}},{responsive:true,displayModeBar:false});
+    }
+
+    renderVariaciones();
+  }catch(e){wrap.innerHTML=`<div class="empty">Error: ${e.message}</div>`;}
+}
+
+function renderVariaciones(){
+  if(!_variacionesData.length)return;
+  const soloAn=document.getElementById('var-solo-anormal').checked;
+  const busq=(document.getElementById('var-busq').value||'').toUpperCase();
+  let rows=[..._variacionesData];
+  if(soloAn)rows=rows.filter(r=>r.ANORMAL);
+  if(busq)rows=rows.filter(r=>((r.ISIN||'')+(r.ESPECIE||'')).toUpperCase().includes(busq));
+  document.getElementById('count-variaciones').textContent=`${rows.length} registros`;
+  const wrap=document.getElementById('wrap-variaciones');
+  if(!rows.length){wrap.innerHTML='<div class="empty">Sin registros para los filtros</div>';return;}
+  const cols=['ISIN','ESPECIE','VAL_I','VAL_F','VAR_ABS','VAR_PCT','ANORMAL'];
+  const avail=cols.filter(c=>rows[0].hasOwnProperty(c));
+  let html=`<table><thead><tr>${avail.map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>`;
+  for(const r of rows){
+    const isA=r.ANORMAL;
+    html+=`<tr class="${isA?'alert-row':''}">`;
+    for(const c of avail){
+      const v=r[c];
+      if(c==='ANORMAL'){html+=`<td>${v?'<span style="color:var(--red2);font-weight:700">⚠</span>':'<span style="color:var(--green2)">✓</span>'}</td>`;}
+      else if(c==='VAR_PCT'){const cl=Math.abs(v||0)>10?'c-err':Math.abs(v||0)>5?'c-warn':'';html+=`<td class="${cl}">${v!=null?v.toFixed(4)+'%':'—'}</td>`;}
+      else if(['VAL_I','VAL_F','VAR_ABS'].includes(c)){html+=`<td class="${nc(v)}">${fmt(v,2)}</td>`;}
+      else{html+=`<td>${String(v||'').trim()}</td>`;}
+    }
+    html+='</tr>';
+  }
+  html+='</tbody></table>';
+  wrap.innerHTML=html;
+}
+
+function exportarVariacionesCSV(){
+  if(!_variacionesData.length){alert('Primero calcula las variaciones.');return;}
+  const keys=Object.keys(_variacionesData[0]);
+  const csv=[keys.join(','),..._variacionesData.map(r=>keys.map(k=>{const v=r[k];if(v==null)return'';if(typeof v==='string'&&v.includes(','))return`"${v}"`;return v;}).join(','))].join('\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));
+  a.download=`variaciones_${document.getElementById('var-fecha-i').value}_${document.getElementById('var-fecha-f').value}.csv`;
+  a.click();
+}
+
+// ── ANÁLISIS: hook en showTab ─────────────────────────────────────────────────
+// (el renderizado se hace en showTab)
+
+// ── VERIFICACIÓN: gráficas post-cálculo ──────────────────────────────────────
+function _renderVerifCharts(){
+  if(!_verifData.length)return;
+  document.getElementById('charts-verif-row').style.display='';
+  const PL2=_PL();
+  // Histograma de diferencias %
+  const dPcts=_verifData.filter(r=>r.DIF_PCT!=null).map(r=>r.DIF_PCT);
+  if(dPcts.length){
+    Plotly.newPlot('chart-verif-hist',[{type:'histogram',x:dPcts,nbinsx:30,marker:{color:'#f0883e',opacity:.8},hovertemplate:'%{x:.2f}%<br>%{y}<extra></extra>'}],
+      {...PL2,margin:{t:5,b:35,l:40,r:10},xaxis:{...PL2.xaxis,title:{text:'Dif %',font:{size:9}}}},{responsive:true,displayModeBar:false});
+  }
+  // Scatter porfin vs manual (solo alertas)
+  const alertas=_verifData.filter(r=>r.ALERTA&&r.VALORACION_PORFIN!=null&&r.VALORACION_MANUAL!=null);
+  if(alertas.length){
+    Plotly.newPlot('chart-verif-scatter',[
+      {type:'scatter',mode:'markers',name:'Alertas',x:alertas.map(r=>r.VALORACION_MANUAL),y:alertas.map(r=>r.VALORACION_PORFIN),
+        text:alertas.map(r=>r.ISIN||r.ESPECIE||''),marker:{color:'#f85149',size:6},
+        hovertemplate:'<b>%{text}</b><br>Manual: %{x:,.0f}<br>Porfin: %{y:,.0f}<extra></extra>'},
+      {type:'scatter',mode:'lines',name:'Línea 45°',x:[Math.min(...alertas.map(r=>r.VALORACION_MANUAL)),Math.max(...alertas.map(r=>r.VALORACION_MANUAL))],
+        y:[Math.min(...alertas.map(r=>r.VALORACION_MANUAL)),Math.max(...alertas.map(r=>r.VALORACION_MANUAL))],
+        line:{color:'#3fb950',dash:'dash',width:1},showlegend:false},
+    ],{...PL2,margin:{t:5,b:35,l:55,r:10},xaxis:{...PL2.xaxis,tickformat:',.2s',title:{text:'Manual',font:{size:9}}},yaxis:{...PL2.yaxis,tickformat:',.2s',title:{text:'Porfin',font:{size:9}}}},{responsive:true,displayModeBar:false});
+  }
+  // Alertas por tipo activo
+  const tipoMap={};
+  _verifData.filter(r=>r.ALERTA).forEach(r=>{const t=r.TIPO||'Sin tipo';tipoMap[t]=(tipoMap[t]||0)+1;});
+  if(Object.keys(tipoMap).length){
+    Plotly.newPlot('chart-verif-tipo',[{type:'bar',x:Object.keys(tipoMap),y:Object.values(tipoMap),marker:{color:'#f85149'}}],
+      {...PL2,margin:{t:5,b:50,l:35,r:10},xaxis:{...PL2.xaxis,tickangle:-30,tickfont:{size:8}}},{responsive:true,displayModeBar:false});
+  }
+}
+
+// ── ERRORES: gráficas ─────────────────────────────────────────────────────────
+function _renderErrorCharts(){
+  if(!_erroresData)return;
+  const PL2=_PL();
+  const rs=_erroresData.resumen_severidad||{};
+  const rt=_erroresData.resumen_tipo||{};
+  const errores=_erroresData.errores||[];
+  // Por severidad
+  if(Object.keys(rs).length){
+    Plotly.newPlot('chart-err-sev',[{
+      type:'pie',labels:Object.keys(rs),values:Object.values(rs),hole:.4,
+      marker:{colors:['#f85149','#e3b341','#3fb950']},textinfo:'label+value',
+    }],{...PL2,margin:{t:5,b:5,l:5,r:5}},{responsive:true,displayModeBar:false});
+  }
+  // Por tipo
+  if(Object.keys(rt).length){
+    Plotly.newPlot('chart-err-tipo',[{type:'bar',x:Object.keys(rt),y:Object.values(rt),marker:{color:'#f0883e'}}],
+      {...PL2,margin:{t:5,b:40,l:35,r:10},xaxis:{...PL2.xaxis,tickangle:-20,tickfont:{size:8}}},{responsive:true,displayModeBar:false});
+  }
+  // Por portafolio
+  const portMap={};
+  errores.forEach(e=>{const p=e.portafolio||'Sin portafolio';portMap[p]=(portMap[p]||0)+1;});
+  const portSorted=Object.entries(portMap).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  if(portSorted.length){
+    Plotly.newPlot('chart-err-port',[{type:'bar',x:portSorted.map(e=>e[0]),y:portSorted.map(e=>e[1]),marker:{color:'#e3b341'}}],
+      {...PL2,margin:{t:5,b:50,l:35,r:10},xaxis:{...PL2.xaxis,tickangle:-30,tickfont:{size:8}}},{responsive:true,displayModeBar:false});
+  }
+}
+
+// ── OPERACIONES 583: gráficas ─────────────────────────────────────────────────
+function _renderOpsCharts(){
+  if(!_ops583Raw)return;
+  document.getElementById('charts-ops-row').style.display='';
+  const PL2=_PL();
+  const tipos=_ops583Raw.tipos_transaccion||{};
+  // Por tipo (conteo)
+  Plotly.newPlot('chart-ops-tipo',[{type:'bar',x:Object.keys(tipos),y:Object.values(tipos),
+    marker:{color:Object.keys(tipos).map(t=>t.includes('COBRO')?'#3fb950':t.includes('RETIRO')?'#f85149':t.includes('COMPRA')?'#1f6feb':'#e3b341')},
+  }],{...PL2,margin:{t:5,b:55,l:35,r:10},xaxis:{...PL2.xaxis,tickangle:-30,tickfont:{size:8}}},{responsive:true,displayModeBar:false});
+  // Por tipo (valor)
+  const rows=_ops583Data;
+  const valMap={};
+  rows.forEach(r=>{const t=r.TRANSACCION||'?';valMap[t]=(valMap[t]||0)+(r.VR_RECIBIDO||0);});
+  Plotly.newPlot('chart-ops-valor',[{type:'bar',x:Object.keys(valMap),y:Object.values(valMap),
+    marker:{color:Object.keys(valMap).map(t=>valMap[t]>=0?'#3fb950':'#f85149')},
+    hovertemplate:'%{x}<br>%{y:,.0f}<extra></extra>',
+  }],{...PL2,margin:{t:5,b:55,l:55,r:10},xaxis:{...PL2.xaxis,tickangle:-30,tickfont:{size:8}},yaxis:{...PL2.yaxis,tickformat:',.2s'}},{responsive:true,displayModeBar:false});
+}
+
+// ── FONDOS: gráfica Caus Mer vs TIR ──────────────────────────────────────────
+function _renderFondoCausChart(){
+  if(!_fondosData)return;
+  const fondos=(_fondosData.fondos||[]).slice(0,12);
+  if(!fondos.length)return;
+  const names=fondos.map(f=>f.FONDO).reverse();
+  const cm=fondos.map(f=>f.caus_mer||0).reverse();
+  const ct=fondos.map(f=>f.caus_tir||0).reverse();
+  Plotly.newPlot('chart-caus-mer-tir',[
+    {type:'bar',orientation:'h',name:'Caus Mercado',x:cm,y:names,marker:{color:'#3fb950'}},
+    {type:'bar',orientation:'h',name:'Caus TIR',x:ct,y:names,marker:{color:'#58a6ff',opacity:.8}},
+  ],{...PL,barmode:'group',margin:{t:5,b:20,l:55,r:15},xaxis:{...PL.xaxis,tickformat:',.2s'},legend:{font:{size:8}}},{responsive:true,displayModeBar:false});
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────────

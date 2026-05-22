@@ -1,0 +1,148 @@
+# =============================================================================
+#  MVALORACION — config.yaml.example
+#  Copia este archivo como "config.yaml" y edita las rutas reales.
+#  El archivo config.yaml NO se sube a git (.gitignore).
+#
+#  El script setup.ps1 genera config.yaml automáticamente la primera vez.
+# =============================================================================
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  DIRECTORIO PRINCIPAL DE DATOS
+#  Aquí se guardan subcarpetas por fecha: data/20260515/, data/20260516/, etc.
+#  Dentro de cada subcarpeta van los archivos 596, 575, 583, MITRA, insumos.
+#
+#  Opciones típicas en entorno corporativo:
+#    - Carpeta local:   C:\MVALORACION\data
+#    - Unidad de red:   \\servidor\valoracion\data
+#    - OneDrive/Teams:  C:\Users\<user>\OneDrive - Empresa\Valoracion\data
+# ─────────────────────────────────────────────────────────────────────────────
+data_dir: "C:\\MVALORACION\\data"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  INFOVALMER — DIRECTORIO RAÍZ
+#  Ruta donde están los archivos diarios de precios Infovalmer.
+#  Estructura esperada:
+#    <infovalmer_dir>\
+#      <YYYYMMDD>\
+#        SP<mmddyy>.001      ← Precios renta fija BVC
+#        SW<mmddyy>.001      ← Precios secundarios
+#        SV<mmddyy>.001      ← Tasas referencia
+#        MX<mmddyy>.txt      ← Renta fija internacional
+#        MX<mmddyy>_RV.txt   ← Renta variable internacional
+#        NOTAS_ESTRUCTURADAS_<YYYYMMDD>.txt
+#        titulos_participativos_valoracion_<YYYYMMDD>.txt
+#
+#  Por defecto apunta a: J:\VALORACION\VALORACION_ESPECIAL\Bolsa\INFOVALMER
+#  Si la unidad J: no existe, mapear la carpeta de red o ajustar aquí.
+# ─────────────────────────────────────────────────────────────────────────────
+infovalmer_dir: "J:\\VALORACION\\VALORACION_ESPECIAL\\Bolsa\\INFOVALMER"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  ARCHIVOS DE REFERENCIA (catálogos maestros)
+#  Se usan para la verificación de valoración manual.
+#  Si no existen, la verificación opera con tipo vacío (sin mapeo de TIPO).
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Catálogo de especies: LLAVE → TIPO de activo
+# Columnas requeridas: LLAVE (clave única del título), TIPO (ej: CDT, TES PESOS, FIC…)
+# Separador: ;   Encoding: latin-1
+ref_especies: "C:\\MVALORACION\\data\\Especies.csv"
+
+# Fondos de capital privado: lista de LLAVE con factor de valoración
+# Columnas: LLAVE, FACTOR (numérico)
+ref_fcpe: "C:\\MVALORACION\\data\\FCPE.xlsx"
+
+# Referencia fiduciaria (Mitra): LLAVE → datos del fondo
+ref_fiduciaria: "C:\\MVALORACION\\data\\FIDUCIARIA0210.xlsx"
+
+# Catálogo general de fondos
+ref_fondos: "C:\\MVALORACION\\data\\FONDOS.xlsx"
+
+# Fondos de capital privado (FCP)
+ref_fcp: "C:\\MVALORACION\\data\\FCP.xlsx"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  UMBRALES DE ALERTA
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Variación porcentual de precio que dispara alerta (default 5%)
+# Aplica en: Insumos (comparación día anterior), Mitra (precio_t vs precio_y)
+umbral_variacion_pct: 5.0
+
+# Diferencia absoluta de causación para marcar alerta (en COP, default 1.0)
+# Aplica en: Porfin 575 (CAUSACION_MER vs CAUSACION_TIR), verificación causación
+umbral_dif_causacion: 1.0
+
+# Diferencia absoluta de valoración para alerta (en COP, default 1000)
+# Aplica en: verificación valoración (Porfin vs Infovalmer)
+umbral_dif_valoracion: 1000.0
+
+# Diferencia porcentual de valoración para alerta (default 1%)
+umbral_dif_valoracion_pct: 1.0
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  SERVIDOR WEB
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Puerto de escucha (default 8000)
+# Si 8000 está ocupado, cambia a 8001, 8080, etc.
+port: 8000
+
+# Dirección de escucha
+# "0.0.0.0"  → accesible desde otros equipos de la red
+# "127.0.0.1" → solo acceso local (más seguro en entorno corporativo)
+host: "0.0.0.0"
+
+# Modo recarga automática (útil en desarrollo, deshabilitar en producción)
+reload: true
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  ENTORNO CORPORATIVO
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Proxy HTTP/HTTPS (si la red corporativa lo requiere para pip/requests)
+# Formato: "http://usuario:clave@proxy.empresa.com:8080"
+# Dejar vacío si no aplica.
+proxy: ""
+
+# Ruta al certificado SSL corporativo (.pem o .crt)
+# Necesario si hay inspección SSL corporativa y pip falla con SSL errors.
+# Ejemplo: "C:\\certs\\corporativo.pem"
+# Dejar vacío si no aplica.
+ssl_cert: ""
+
+# Deshabilitar verificación SSL (solo si hay problemas de certificado y no
+# se puede obtener el .pem corporativo — NO recomendado en producción)
+ssl_verify: true
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  NOTAS DE USO
+# ─────────────────────────────────────────────────────────────────────────────
+# 1. Estructura de archivos esperada en data_dir:
+#
+#    data/
+#    ├── Especies.csv          ← catálogo maestro (col: LLAVE;TIPO)
+#    ├── FCPE.xlsx             ← referencia FCPE
+#    ├── FONDOS.xlsx           ← catálogo fondos
+#    ├── 20260515/             ← una carpeta por fecha (YYYYMMDD)
+#    │   ├── 59620260515.CSV   ← Porfin 596 (posiciones)
+#    │   ├── SKCLI575*.CSV     ← Porfin 575 (causaciones)
+#    │   ├── 58320260515.CSV   ← Porfin 583 (operaciones, opcional)
+#    │   ├── MITRA_*.xlsx      ← archivo Mitra (valoración fiduciaria)
+#    │   └── obs_*.json        ← observaciones guardadas (generados por la app)
+#    └── 20260516/
+#        └── ...
+#
+# 2. Los archivos Infovalmer (SP, SW, MX, etc.) se buscan en infovalmer_dir.
+#    Si no están disponibles, la verificación de valoración opera sin precios
+#    externos (usa el precio del propio 596).
+#
+# 3. Para acceso desde otros equipos: host: "0.0.0.0" y abrir el puerto
+#    en el firewall de Windows (port: 8000 o el configurado).
