@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Porfin 596/575 &middot; MVALORACION</title>
+  <link rel="stylesheet" href="/static/design.css"/>
+  <link rel="stylesheet" href="/static/style.css"/>
+</head>
+<body>
+
+<nav class="nav">
+  <span class="nav-logo">PORFIN &middot; MVALORACION</span>
+  <div style="flex:1;"></div>
+  <div style="display:flex;align-items:center;gap:.5rem;">
+    <button class="btn btn-ghost btn-sm" id="btn-theme" onclick="toggleTheme()" title="Tema claro/oscuro">Moon</button>
+    <button class="btn btn-green btn-sm" onclick="abrirUpload()">&#x2B06; Cargar</button>
+    <button class="btn btn-ghost btn-sm" onclick="descargarExcel()">Excel</button>
+    <button class="btn btn-ghost btn-sm" onclick="exportarCSV()">CSV</button>
+  </div>
+</nav>
+
+<!-- Modal Upload -->
+<div class="overlay" id="modal-upload">
+  <div class="modal">
+    <h3 style="margin:0 0 1rem;font-size:.95rem;display:flex;align-items:center;justify-content:space-between;">
+      Cargar archivo del dia
+      <button class="btn btn-ghost btn-sm" onclick="cerrarUpload()">&#x2715;</button>
+    </h3>
+    <div class="form-group">
+      <label class="form-label">Fecha (YYYYMMDD)</label>
+      <input type="text" class="form-input" id="up-fecha" placeholder="20260515" maxlength="8"/>
+    </div>
+    <div class="upload-zone" id="drop-596"
+      ondragover="event.preventDefault();this.classList.add('drag-over')"
+      ondragleave="this.classList.remove('drag-over')"
+      ondrop="handleDrop(event,'596')" onclick="document.getElementById('file-596').click()">
+      <input type="file" id="file-596" accept=".csv,.CSV,.txt,.TXT" onchange="handleFile(this,'596')" style="display:none;"/>
+      <div style="font-size:1.5rem;">&#x1F4C4;</div>
+      <div><strong>Archivo 596</strong> (SKCLI596)<br><small id="name-596" style="color:var(--green);"></small></div>
+    </div>
+    <div style="height:.4rem;"></div>
+    <div class="upload-zone" id="drop-575"
+      ondragover="event.preventDefault();this.classList.add('drag-over')"
+      ondragleave="this.classList.remove('drag-over')"
+      ondrop="handleDrop(event,'575')" onclick="document.getElementById('file-575').click()">
+      <input type="file" id="file-575" accept=".csv,.CSV,.txt,.TXT" onchange="handleFile(this,'575')" style="display:none;"/>
+      <div style="font-size:1.5rem;">&#x1F4C4;</div>
+      <div><strong>Archivo 575</strong> (SKCLI575)<br><small id="name-575" style="color:var(--green);"></small></div>
+    </div>
+    <div style="height:.4rem;"></div>
+    <div class="upload-zone" id="drop-583"
+      ondragover="event.preventDefault();this.classList.add('drag-over')"
+      ondragleave="this.classList.remove('drag-over')"
+      ondrop="handleDrop(event,'583')" onclick="document.getElementById('file-583').click()">
+      <input type="file" id="file-583" accept=".csv,.CSV,.txt,.TXT" onchange="handleFile(this,'583')" style="display:none;"/>
+      <div style="font-size:1.5rem;">&#x1F4E6;</div>
+      <div><strong>Archivo 583</strong> (Operaciones - opcional)<br><small id="name-583" style="color:var(--green);"></small></div>
+    </div>
+    <div class="prog-bar" style="margin-top:.75rem;"><div class="prog-fill" id="prog-fill"></div></div>
+    <div id="upload-msg" style="font-size:.75rem;margin-top:.4rem;min-height:1rem;"></div>
+    <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:.9rem;">
+      <button class="btn btn-ghost btn-sm" onclick="cerrarUpload()">Cancelar</button>
+      <button class="btn btn-sm" onclick="subirArchivos()">Subir y Recargar</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOOLBAR -->
+<div class="toolbar">
+  <div class="tb-group">
+    <label class="tb-label">Fecha</label>
+    <select class="tb-sel" id="sel-fecha" onchange="cargarTodo()"></select>
+  </div>
+  <div class="tb-group">
+    <label class="tb-label">Portafolio</label>
+    <select class="tb-sel" id="fil-portafolio" onchange="cargarPosiciones()"><option value="">Todos</option></select>
+  </div>
+  <div class="tb-group">
+    <label class="tb-label">Moneda</label>
+    <select class="tb-sel" id="fil-moneda" onchange="cargarPosiciones()"><option value="">Todas</option></select>
+  </div>
+  <div class="tb-group">
+    <label class="tb-label">Buscar</label>
+    <input type="text" class="tb-inp" id="fil-busqueda" placeholder="ISIN / especie / nemo..." oninput="debounce(cargarPosiciones,380)()" style="width:200px;"/>
+  </div>
+  <label style="display:flex;align-items:center;gap:.3rem;cursor:pointer;font-size:.75rem;color:var(--muted);padding-bottom:1px;">
+    <input type="checkbox" id="solo-alertas" onchange="cargarPosiciones()"> Solo alertas
+  </label>
+  <button class="btn btn-ghost btn-sm" onclick="cargarTodo()">&#x21BA; Actualizar</button>
+</div>
+
+<!-- KPIs -->
+<div class="kpi-band">
+  <div class="kpi blue">
+    <div class="kpi-label">Posiciones 596</div>
+    <div class="kpi-value" id="kpi-total">&mdash;</div>
+    <div class="kpi-sub" id="kpi-archivo-596">archivo</div>
+  </div>
+  <div class="kpi ok">
+    <div class="kpi-label">Con precio</div>
+    <div class="kpi-value" id="kpi-con-precio">&mdash;</div>
+    <div class="kpi-sub">valorados</div>
+  </div>
+  <div class="kpi err">
+    <div class="kpi-label">Sin precio</div>
+    <div class="kpi-value" id="kpi-sin-precio">&mdash;</div>
+    <div class="kpi-sub">requieren atencion</div>
+  </div>
+  <div class="kpi purple">
+    <div class="kpi-label">Vlr Mercado Total</div>
+    <div class="kpi-value" id="kpi-vlr-total">&mdash;</div>
+    <div class="kpi-sub">COP</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Causacion Mercado</div>
+    <div class="kpi-value" id="kpi-causacion">&mdash;</div>
+    <div class="kpi-sub" id="kpi-archivo-575">575 total dia</div>
+  </div>
+  <div class="kpi yellow">
+    <div class="kpi-label">Observaciones</div>
+    <div class="kpi-value" id="kpi-obs">&mdash;</div>
+    <div class="kpi-sub">anotaciones manuales</div>
+  </div>
+</div>
+
+<!-- TAB BAR -->
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="showTab('tab-596',this)">Posiciones 596</button>
+  <button class="tab-btn" onclick="showTab('tab-causaciones',this)">Causaciones 575</button>
+  <button class="tab-btn" onclick="showTab('tab-fondos',this)">Fondos</button>
+  <button class="tab-btn" onclick="showTab('tab-tir',this)">TIR/DV <span class="tab-badge" id="tir-badge" style="display:none;"></span></button>
+  <button class="tab-btn" onclick="showTab('tab-verificacion',this)">Verificacion <span class="tab-badge" id="verif-badge" style="display:none;"></span></button>
+  <button class="tab-btn" onclick="showTab('tab-operaciones',this)">Operaciones 583 <span class="tab-badge warn" id="ops-badge" style="display:none;"></span></button>
+  <button class="tab-btn" onclick="showTab('tab-errores',this)">Errores</button>
+  <button class="tab-btn" onclick="showTab('tab-portafolios',this)">Portafolios</button>
+  <button class="tab-btn" onclick="showTab('tab-monedas',this)">Monedas</button>
+  <button class="tab-btn" onclick="showTab('tab-analisis',this)">Analisis</button>
+  <button class="tab-btn" onclick="showTab('tab-variaciones',this)">Variaciones</button>
+  <button class="tab-btn" onclick="showTab('tab-config',this)">Config</button>
+  <button class="tab-btn" onclick="showTab('tab-logs',this)">Logs</button>
+</div>
+
+<!-- ALERTAS BANNER -->
+<div style="padding:.4rem 1rem 0;" id="alertas-banner-wrap"></div>
+
+<!-- PANELS -->
+<div class="panels">
+
+<!-- TAB: POSICIONES 596 -->
+<div class="panel active" id="tab-596">
+  <div class="chart-grid-3" id="charts-resumen">
+    <div class="card"><div class="card-title">Distribucion por especie <span class="badge" id="cnt-especie">0</span></div><div id="chart-especie" style="height:220px;"></div></div>
+    <div class="card"><div class="card-title">Por portafolio</div><div id="chart-portafolio" style="height:220px;"></div></div>
+    <div class="card"><div class="card-title">Por moneda</div><div id="chart-moneda" style="height:220px;"></div></div>
+  </div>
+  <div class="filter-bar">
+    <span id="count-596" style="color:var(--muted);font-size:.75rem;"></span>
+    <button class="btn btn-ghost btn-sm" onclick="toggleSoloAlertas()">Solo sin precio</button>
+    <span style="color:var(--muted);font-size:.72rem;margin-left:.25rem;">Haz clic en OBS -&gt; agrega texto -&gt; Enter</span>
+  </div>
+  <div class="twrap" id="wrap-596"><div class="empty"><span class="spinner"></span></div></div>
+</div>
+
+<!-- TAB: CAUSACIONES 575 -->
+<div class="panel" id="tab-causaciones">
+  <div class="chart-grid-2">
+    <div class="card"><div class="card-title">Causacion Mercado vs TIR</div><div id="chart-causacion" style="height:200px;"></div></div>
+    <div class="card"><div class="card-title">Errores por tipo</div><div id="chart-errores" style="height:200px;"></div></div>
+  </div>
+  <div class="pills" id="pills-causacion"></div>
+  <div class="filter-bar">
+    <input type="text" class="tb-inp" id="fil-busq-575" placeholder="Especie / ISIN..." oninput="debounce(renderCausaciones,380)()" style="width:200px;"/>
+    <label style="display:flex;align-items:center;gap:.3rem;cursor:pointer;font-size:.75rem;color:var(--muted);"><input type="checkbox" id="solo-alertas-575" onchange="renderCausaciones()"> Solo alertas</label>
+    <span id="count-575" style="color:var(--muted);font-size:.75rem;"></span>
+  </div>
+  <div class="twrap" id="wrap-causaciones"><div class="empty"><span class="spinner"></span></div></div>
+</div>
+
+<!-- TAB: FONDOS -->
+<div class="panel" id="tab-fondos">
+  <div id="kpi-fondos-row" style="display:grid;grid-template-columns:repeat(4,1fr);gap:.5rem;margin-bottom:.75rem;"></div>
+  <div class="chart-grid-3">
+    <div class="card"><div class="card-title">Fondos por valor mercado top 15</div><div id="chart-fondos" style="height:300px;"></div></div>
+    <div class="card"><div class="card-title">Causacion Mercado vs TIR (top 12)</div><div id="chart-caus-mer-tir" style="height:300px;"></div></div>
+    <div class="card"><div class="card-title">Por moneda normalizada</div><div id="chart-mon-fondos" style="height:300px;"></div></div>
+  </div>
+  <div class="filter-bar">
+    <input type="text" class="tb-inp" id="fil-busq-fondo" placeholder="Buscar fondo..." oninput="renderFondos()" style="width:150px;"/>
+    <select class="tb-sel" id="fil-mon-fondo" onchange="renderFondos()">
+      <option value="">Todas las monedas</option>
+      <option value="COP">COP</option><option value="USD">USD</option><option value="UVR">UVR</option><option value="EUR">EUR</option><option value="GBP">GBP</option>
+    </select>
+    <label style="display:flex;align-items:center;gap:.3rem;cursor:pointer;font-size:.75rem;color:var(--muted);"><input type="checkbox" id="solo-alertas-fondo" onchange="renderFondos()"> Solo con alertas</label>
+    <button class="btn btn-ghost btn-sm" onclick="limpiarFondoSeleccionado()">Volver</button>
+  </div>
+  <div id="wrap-fondos-lista">
+    <div class="twrap" id="wrap-fondos"><div class="empty"><span class="spinner"></span></div></div>
+  </div>
+  <div id="wrap-fondo-detalle" style="display:none;">
+    <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.6rem;flex-wrap:wrap;">
+      <h3 id="fondo-detalle-titulo" style="font-size:.9rem;color:var(--blue);margin:0;"></h3>
+      <div class="fondo-kpis" id="kpi-fondo-sel"></div>
+    </div>
+    <div class="filter-bar">
+      <select class="tb-sel" id="fil-mon-detalle" onchange="cargarFondoDetalle()">
+        <option value="">Todas las monedas</option>
+        <option value="COP">COP</option><option value="USD">USD</option><option value="UVR">UVR</option><option value="EUR">EUR</option><option value="GBP">GBP</option>
+      </select>
+      <label style="display:flex;align-items:center;gap:.3rem;cursor:pointer;font-size:.75rem;color:var(--muted);"><input type="checkbox" id="solo-alertas-detalle" onchange="cargarFondoDetalle()"> Solo alertas</label>
+    </div>
+    <div class="twrap" id="wrap-fondo-detalle-tabla"><div class="empty"><span class="spinner"></span></div></div>
+  </div>
+</div>
+
+<!-- TAB: TIR/DV -->
+<div class="panel" id="tab-tir">
+  <div class="banner warn" style="margin-bottom:.75rem;">
+    Titulos valorando a <strong>TIR / curva propia</strong> cuando deberia aplicarse precio de mercado. Se excluyen emitidos hoy y DV con vencimiento hoy/manana.
+  </div>
+  <div class="subtab-bar">
+    <button class="subtab active" id="btn-tir-596" onclick="showTirTab('596')">Desde 596</button>
+    <button class="subtab" id="btn-tir-575" onclick="showTirTab('575')">Desde 575</button>
+  </div>
+  <div class="pills" id="tir-resumen"></div>
+  <div class="filter-bar">
+    <input type="text" class="tb-inp" id="fil-busq-tir" placeholder="ISIN / especie..." oninput="renderTir()" style="width:200px;"/>
+    <select class="tb-sel" id="fil-motivo-tir" onchange="renderTir()">
+      <option value="">Todos los motivos</option>
+      <option value="DV">METODO DV</option>
+      <option value="1DV">FUENTE 1DV</option>
+      <option value="TC">Met TC</option>
+    </select>
+    <span id="count-tir" style="color:var(--muted);font-size:.75rem;"></span>
+  </div>
+  <div class="twrap" id="wrap-tir"><div class="empty"><span class="spinner"></span></div></div>
+  <div style="margin-top:.6rem;padding:.6rem .75rem;background:var(--surf2);border-radius:var(--rl);font-size:.72rem;color:var(--muted);" id="tir-config-info">Cargando configuracion...</div>
+</div>
+
+<!-- TAB: OPERACIONES 583 -->
+<div class="panel" id="tab-operaciones">
+  <div class="banner info" style="margin-bottom:.75rem;">
+    <strong>Operaciones del dia (583)</strong> - Compras, ventas, cobros de interes/dividendo. Carga el archivo 583 para activar esta seccion.
+  </div>
+  <div id="kpi-ops-row" style="display:flex;gap:.6rem;flex-wrap:wrap;margin-bottom:.75rem;">
+    <div class="kpi-pill"><div class="kpi-pill-val c-blue" id="ops-total">&mdash;</div><div class="kpi-pill-info"><div class="kpi-pill-label">Total registros</div></div></div>
+    <div class="kpi-pill"><div class="kpi-pill-val c-green" id="ops-intdiv">&mdash;</div><div class="kpi-pill-info"><div class="kpi-pill-label">Total Int/Div cobrados</div></div></div>
+    <div class="kpi-pill"><div class="kpi-pill-val c-purple" id="ops-incret">&mdash;</div><div class="kpi-pill-info"><div class="kpi-pill-label">Inc/Ret Capital neto</div></div></div>
+    <div class="kpi-pill"><div class="kpi-pill-val" id="ops-archivo" style="font-size:.75rem;">&mdash;</div><div class="kpi-pill-info"><div class="kpi-pill-label">Archivo</div></div></div>
+  </div>
+  <div class="chart-grid-2" id="charts-ops-row" style="margin-bottom:.75rem;display:none;">
+    <div class="card"><div class="card-title">Operaciones por tipo (conteo)</div><div id="chart-ops-tipo" style="height:200px;"></div></div>
+    <div class="card"><div class="card-title">Valor recibido por tipo</div><div id="chart-ops-valor" style="height:200px;"></div></div>
+  </div>
+  <div class="filter-bar">
+    <input type="text" class="tb-inp" id="fil-busq-ops" placeholder="ISIN / Especie / Consec..." oninput="renderOps()" style="width:220px;"/>
+    <select class="tb-sel" id="fil-tipo-ops" onchange="renderOps()"><option value="">Todos los tipos</option></select>
+    <span id="count-ops" style="color:var(--muted);font-size:.75rem;"></span>
+    <button class="btn btn-ghost btn-sm" onclick="cargarOps583()" style="margin-left:auto;">&#x21BA; Recargar</button>
+    <button class="btn btn-ghost btn-sm" onclick="exportarOpsCSV()">CSV</button>
+  </div>
+  <div class="twrap" id="wrap-ops"><div class="empty">Carga el archivo 583 para ver las operaciones del dia</div></div>
+</div>
+
+<!-- TAB: ERRORES -->
+<div class="panel" id="tab-errores">
+  <div class="chart-grid-3" style="margin-bottom:.75rem;">
+    <div class="card"><div class="card-title">Por severidad</div><div id="chart-err-sev" style="height:180px;"></div></div>
+    <div class="card"><div class="card-title">Por tipo de error</div><div id="chart-err-tipo" style="height:180px;"></div></div>
+    <div class="card"><div class="card-title">Por portafolio (top 10)</div><div id="chart-err-port" style="height:180px;"></div></div>
+  </div>
+  <div class="filter-bar">
+    <select class="tb-sel" id="fil-severidad" onchange="renderErrores()">
+      <option value="">Todas las severidades</option>
+      <option value="ALTO">Alto</option>
+      <option value="MEDIO">Medio</option>
+      <option value="BAJO">Bajo</option>
+    </select>
+    <select class="tb-sel" id="fil-tipo-error" onchange="renderErrores()">
+      <option value="">Todos los tipos</option>
+      <option value="SIN PRECIO">Sin precio</option>
+      <option value="VALORACION NEGATIVA">Valoracion negativa</option>
+      <option value="NOMINAL CERO">Nominal cero</option>
+    </select>
+    <input type="text" class="tb-inp" id="fil-busq-error" placeholder="ISIN / especie..." oninput="renderErrores()" style="width:180px;"/>
+    <span id="count-errores" style="color:var(--muted);font-size:.75rem;"></span>
+  </div>
+  <div class="twrap" id="wrap-errores"><div class="empty"><span class="spinner"></span></div></div>
+</div>
+
+<!-- TAB: PORTAFOLIOS -->
+<div class="panel" id="tab-portafolios">
+  <div class="chart-grid-2" style="margin-bottom:.75rem;">
+    <div class="card"><div class="card-title">Valor mercado por portafolio</div><div id="chart-port-bar" style="height:280px;"></div></div>
+    <div class="card"><div class="card-title">Composicion % portafolio</div><div id="chart-port-pie" style="height:280px;"></div></div>
+  </div>
+  <div class="twrap" id="wrap-portafolios"><div class="empty"><span class="spinner"></span></div></div>
+</div>
+
+<!-- TAB: MONEDAS -->
+<div class="panel" id="tab-monedas">
+  <div class="chart-grid-2" style="margin-bottom:.75rem;">
+    <div class="card"><div class="card-title">Valor mercado por moneda</div><div id="chart-mon-bar" style="height:240px;"></div></div>
+    <div class="card"><div class="card-title">Distribucion posiciones por moneda</div><div id="chart-mon-pos" style="height:240px;"></div></div>
+  </div>
+  <div class="twrap" id="wrap-monedas-596"><div class="empty"><span class="spinner"></span></div></div>
+</div>
+
+<!-- TAB: ANALISIS -->
+<div class="panel" id="tab-analisis">
+  <div class="banner info" style="margin-bottom:.75rem;">
+    <strong>Analisis de portafolio</strong> - Scatter precio vs TIR, distribucion de valores, composicion por clase y analisis de concentracion.
+  </div>
+  <div class="chart-grid-3" style="margin-bottom:.75rem;">
+    <div class="card"><div class="card-title">Precio vs TIR (scatter)</div><div id="chart-scatter-ptir" style="height:260px;"></div></div>
+    <div class="card"><div class="card-title">Distribucion valor mercado (histograma)</div><div id="chart-hist-vlr" style="height:260px;"></div></div>
+    <div class="card"><div class="card-title">Por clase de titulo</div><div id="chart-clase" style="height:260px;"></div></div>
+  </div>
+  <div class="chart-grid-2" style="margin-bottom:.75rem;">
+    <div class="card"><div class="card-title">Valor mercado vs Nominal (top 30)</div><div id="chart-vlr-vs-nom" style="height:280px;"></div></div>
+    <div class="card"><div class="card-title">Distribucion por vencimiento</div><div id="chart-vcto-dist" style="height:280px;"></div></div>
+  </div>
+  <div class="chart-grid-2">
+    <div class="card"><div class="card-title">Concentracion top-10 posiciones (% del total)</div><div id="chart-concentracion" style="height:240px;"></div></div>
+    <div class="card"><div class="card-title">Distribucion de TIR por tipo</div><div id="chart-tir-box" style="height:240px;"></div></div>
+  </div>
+</div>
+
+<!-- TAB: VARIACIONES -->
+<div class="panel" id="tab-variaciones">
+  <div class="banner info" style="margin-bottom:.75rem;">
+    <strong>Variaciones entre fechas</strong> - Compara valoracion del 596 entre dos fechas. Detecta cambios anormales (&gt;umbral%).
+  </div>
+  <div style="display:flex;gap:.65rem;align-items:flex-end;flex-wrap:wrap;margin-bottom:.75rem;background:var(--surf);border:1px solid var(--bdr2);border-radius:var(--rl);padding:.75rem 1rem;">
+    <div class="tb-group"><label class="tb-label">Fecha inicio</label><select class="tb-sel" id="var-fecha-i"></select></div>
+    <div class="tb-group"><label class="tb-label">Fecha fin</label><select class="tb-sel" id="var-fecha-f"></select></div>
+    <div class="tb-group"><label class="tb-label">Umbral variacion %</label><input type="number" class="tb-inp" id="var-umbral" value="5" step="0.5" min="0" style="width:80px;"/></div>
+    <button class="btn" onclick="cargarVariaciones()">Calcular variaciones</button>
+    <button class="btn btn-ghost btn-sm" onclick="exportarVariacionesCSV()">CSV</button>
+  </div>
+  <div id="kpi-variaciones-row" style="display:flex;gap:.6rem;flex-wrap:wrap;margin-bottom:.75rem;"></div>
+  <div class="chart-grid-2" style="margin-bottom:.75rem;">
+    <div class="card"><div class="card-title">Top variaciones absolutas (COP)</div><div id="chart-var-abs" style="height:300px;"></div></div>
+    <div class="card"><div class="card-title">Top variaciones % (anormales en rojo)</div><div id="chart-var-pct" style="height:300px;"></div></div>
+  </div>
+  <div class="card" style="margin-bottom:.75rem;"><div class="card-title">Distribucion de variaciones %</div><div id="chart-var-hist" style="height:200px;"></div></div>
+  <div class="filter-bar">
+    <label style="display:flex;align-items:center;gap:.3rem;cursor:pointer;font-size:.75rem;color:var(--muted);"><input type="checkbox" id="var-solo-anormal" onchange="renderVariaciones()"> Solo anormales</label>
+    <input type="text" class="tb-inp" id="var-busq" placeholder="ISIN / especie..." oninput="renderVariaciones()" style="width:200px;"/>
+    <span id="count-variaciones" style="color:var(--muted);font-size:.75rem;"></span>
+  </div>
+  <div class="twrap" id="wrap-variaciones"><div class="empty">Selecciona dos fechas y haz clic en Calcular variaciones</div></div>
+</div>
+
+<!-- TAB: VERIFICACION -->
+<div class="panel" id="tab-verificacion">
+  <div class="banner info" style="margin-bottom:.75rem;border-color:var(--blue);">
+    <strong>Verificacion de valoracion manual</strong> - Calcula el valor de mercado teorico usando precios de Infovalmer (SP/SW/MX) y compara contra lo que reporto Porfin. Requiere Especies.csv configurado.
+  </div>
+  <div id="kpi-verif-row" style="display:flex;gap:.6rem;flex-wrap:wrap;margin-bottom:.75rem;">
+    <div class="kpi-pill"><div class="kpi-pill-val c-blue" id="kv-total">&mdash;</div><div class="kpi-pill-info"><div class="kpi-pill-label">Total posiciones</div></div></div>
+    <div class="kpi-pill"><div class="kpi-pill-val c-green" id="kv-con-precio">&mdash;</div><div class="kpi-pill-info"><div class="kpi-pill-label">Con precio Infovalmer</div></div></div>
+    <div class="kpi-pill"><div class="kpi-pill-val c-warn" id="kv-sin-precio">&mdash;</div><div class="kpi-pill-info"><div class="kpi-pill-label">Sin precio Infovalmer</div></div></div>
+    <div class="kpi-pill"><div class="kpi-pill-val c-err" id="kv-alertas">&mdash;</div><div class="kpi-pill-info"><div class="kpi-pill-label">Alertas valoracion</div></div></div>
+    <div class="kpi-pill"><div class="kpi-pill-val c-purple" id="kv-sin-tipo">&mdash;</div><div class="kpi-pill-info"><div class="kpi-pill-label">Sin tipo activo</div></div></div>
+  </div>
+  <div class="filter-bar" style="margin-bottom:.5rem;">
+    <div><div style="font-size:.65rem;color:var(--muted);margin-bottom:.2rem;text-transform:uppercase;">Umbral % alerta</div><input type="number" class="tb-inp" id="verif-umbral-pct" value="1" step="0.1" min="0" style="width:80px;"/></div>
+    <div><div style="font-size:.65rem;color:var(--muted);margin-bottom:.2rem;text-transform:uppercase;">Umbral abs alerta</div><input type="number" class="tb-inp" id="verif-umbral-abs" value="1000" step="100" min="0" style="width:100px;"/></div>
+    <div><div style="font-size:.65rem;color:var(--muted);margin-bottom:.2rem;text-transform:uppercase;">Portafolio</div><input type="text" class="tb-inp" id="verif-portafolio" placeholder="Todos..." style="width:140px;"/></div>
+    <label style="display:flex;align-items:center;gap:.4rem;font-size:.78rem;color:var(--text);margin-top:1rem;"><input type="checkbox" id="verif-solo-alertas"> Solo alertas</label>
+    <button class="btn" onclick="cargarVerificacion()" style="margin-top:.9rem;">Calcular verificacion</button>
+    <button class="btn btn-ghost btn-sm" onclick="exportarVerifCSV()" style="margin-top:.9rem;">CSV</button>
+  </div>
+  <div class="chart-grid-3" id="charts-verif-row" style="margin-bottom:.75rem;display:none;">
+    <div class="card"><div class="card-title">Distribucion diferencias % valoracion</div><div id="chart-verif-hist" style="height:200px;"></div></div>
+    <div class="card"><div class="card-title">Porfin vs Manual (top alertas)</div><div id="chart-verif-scatter" style="height:200px;"></div></div>
+    <div class="card"><div class="card-title">Alertas por tipo activo</div><div id="chart-verif-tipo" style="height:200px;"></div></div>
+  </div>
+  <div class="subtab-bar" style="margin-bottom:.75rem;">
+    <button class="subtab active" id="vsubtab-valoracion" onclick="switchVerifSubtab('valoracion',this)">Verificacion Valoracion (596)</button>
+    <button class="subtab" id="vsubtab-causacion" onclick="switchVerifSubtab('causacion',this)">Verificacion Causacion (575)</button>
+  </div>
+  <div id="wrap-verif-valoracion">
+    <div class="twrap" id="wrap-verificacion"><div class="empty">Haz clic en Calcular verificacion para iniciar</div></div>
+  </div>
+  <div id="wrap-verif-causacion" style="display:none;">
+    <div id="banner-583-faltante" class="banner warn" style="display:none;margin-bottom:.75rem;">
+      Archivo <strong>583 no encontrado</strong> - causacion calculada sin INT/DIV.
+    </div>
+    <div id="kpi-verif-caus-row" style="display:flex;gap:.6rem;flex-wrap:wrap;margin-bottom:.75rem;">
+      <div class="kpi-pill"><div class="kpi-pill-val c-blue" id="kvc-total">&mdash;</div><div class="kpi-pill-info"><div class="kpi-pill-label">Posiciones 575</div></div></div>
+      <div class="kpi-pill"><div class="kpi-pill-val c-err" id="kvc-alertas">&mdash;</div><div class="kpi-pill-info"><div class="kpi-pill-label">Alertas causacion</div></div></div>
+      <div class="kpi-pill"><div class="kpi-pill-val c-warn" id="kvc-dif-total">&mdash;</div><div class="kpi-pill-info"><div class="kpi-pill-label">Dif total causacion</div></div></div>
+      <div class="kpi-pill"><div class="kpi-pill-val c-purple" id="kvc-int-div">&mdash;</div><div class="kpi-pill-info"><div class="kpi-pill-label">INT/DIV cobrados (583)</div></div></div>
+      <div class="kpi-pill"><div class="kpi-pill-val" id="kvc-583" style="font-size:.8rem;">&mdash;</div><div class="kpi-pill-info"><div class="kpi-pill-label">Archivo 583</div></div></div>
+    </div>
+    <div class="twrap" id="wrap-verif-caus-tabla"><div class="empty">Clic en Calcular verificacion</div></div>
+  </div>
+</div>
+
+<!-- TAB: CONFIG -->
+<div class="panel" id="tab-config">
+  <div class="cfg-section">
+    <div class="cfg-title">Directorio de datos</div>
+    <div class="form-group"><label class="form-label">data_dir</label><input type="text" class="form-input" id="cfg-data-dir" placeholder="Ruta absoluta o relativa..."/></div>
+  </div>
+  <div class="cfg-section">
+    <div class="cfg-title">Archivos de referencia</div>
+    <div class="form-group"><label class="form-label">ref_especies (Especies.csv)</label><input type="text" class="form-input" id="cfg-ref-especies" placeholder="data/Especies.csv"/></div>
+    <div class="form-group"><label class="form-label">ref_fcpe (FCPE.xlsx)</label><input type="text" class="form-input" id="cfg-ref-fcpe" placeholder="data/FCPE.xlsx"/></div>
+    <div class="form-group"><label class="form-label">ref_fiduciaria (FIDUCIARIA.xlsx)</label><input type="text" class="form-input" id="cfg-ref-fiduciaria" placeholder="data/FIDUCIARIA.xlsx"/></div>
+    <div class="form-group"><label class="form-label">ref_fondos (FONDOS.xlsx)</label><input type="text" class="form-input" id="cfg-ref-fondos" placeholder="data/FONDOS.xlsx"/></div>
+    <div class="form-group"><label class="form-label">ref_fcp (FCP.xlsx)</label><input type="text" class="form-input" id="cfg-ref-fcp" placeholder="data/FCP.xlsx"/></div>
+  </div>
+  <div class="cfg-section">
+    <div class="cfg-title">Umbrales</div>
+    <div class="form-group"><label class="form-label">Umbral dif. causacion (COP)</label><input type="number" class="form-input" id="cfg-umbral-causacion" step="0.1" min="0" style="width:140px;"/></div>
+    <div class="form-group"><label class="form-label">Umbral dif. valoracion (COP)</label><input type="number" class="form-input" id="cfg-umbral-valoracion" step="100" min="0" style="width:140px;"/></div>
+    <div class="form-group"><label class="form-label">Umbral dif. valoracion (%)</label><input type="number" class="form-input" id="cfg-umbral-valoracion-pct" step="0.1" min="0" style="width:140px;"/></div>
+  </div>
+  <div class="cfg-section">
+    <div class="cfg-title">Servidor</div>
+    <div class="form-group"><label class="form-label">Host</label><input type="text" class="form-input" id="cfg-host" style="width:160px;"/></div>
+    <div class="form-group"><label class="form-label">Puerto</label><input type="number" class="form-input" id="cfg-port" style="width:100px;"/></div>
+  </div>
+  <div style="display:flex;gap:.5rem;align-items:center;">
+    <button class="btn btn-green" onclick="guardarConfig()">Guardar</button>
+    <span id="cfg-msg" style="font-size:.8rem;"></span>
+  </div>
+</div>
+
+<!-- TAB: LOGS -->
+<div class="panel" id="tab-logs">
+  <div class="filter-bar" style="margin-bottom:.5rem;">
+    <button class="btn btn-ghost btn-sm" onclick="cargarLogs()">&#x21BA; Actualizar</button>
+    <label style="display:flex;align-items:center;gap:.3rem;font-size:.75rem;color:var(--muted);"><input type="checkbox" id="log-auto" onchange="toggleLogAuto()"> Auto (5 s)</label>
+    <select class="tb-sel" id="log-level" onchange="filtrarLogs()">
+      <option value="">Todos</option><option value="ERROR">ERROR</option><option value="WARNING">WARNING</option><option value="INFO">INFO</option>
+    </select>
+    <span id="log-count" style="color:var(--muted);font-size:.75rem;"></span>
+  </div>
+  <div class="log-wrap" id="log-wrap"></div>
+</div>
+
+</div><!-- /panels -->
+
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<script src="/static/nav.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Mitra &middot; MVALORACION</title>
+  <link rel="stylesheet" href="/static/design.css"/>
+  <link rel="stylesheet" href="/static/style.css"/>
+</head>
+<body>
+
+<nav class="nav">
+  <span class="nav-logo">MITRA &middot; MVALORACION</span>
+  <div style="flex:1;"></div>
+  <div style="display:flex;align-items:center;gap:.5rem;">
+    <button class="btn btn-ghost btn-sm" id="btn-theme" onclick="toggleTheme()" title="Tema claro/oscuro">Moon</button>
+  </div>
+</nav>
+
+<!-- TOOLBAR -->
+<div class="toolbar">
+  <div class="tb-group">
+    <label class="tb-label">Fecha</label>
+    <select class="tb-sel" id="sel-fecha" onchange="cargarTodo()"><option value="">Cargando...</option></select>
+  </div>
+  <div class="tb-group">
+    <label class="tb-label">Fecha anterior</label>
+    <select class="tb-sel" id="sel-fecha-ant"><option value="">&#x2014; ninguna &#x2014;</option></select>
+  </div>
+  <div class="tb-group">
+    <label class="tb-label">Umbral var. precio %</label>
+    <input type="number" class="tb-inp" id="umbral" value="5" min="0" step="0.5" style="width:80px;"/>
+  </div>
+  <button class="btn btn-ghost btn-sm" onclick="cargarTodo()">&#x21BA; Actualizar</button>
+</div>
+
+<!-- KPIs -->
+<div class="kpi-band">
+  <div class="kpi">
+    <div class="kpi-label">Posiciones</div>
+    <div class="kpi-value" id="kpi-pos">&mdash;</div>
+    <div class="kpi-sub">en Mitra</div>
+  </div>
+  <div class="kpi blue">
+    <div class="kpi-label">Val. DI (COP)</div>
+    <div class="kpi-value" id="kpi-val-di">&mdash;</div>
+    <div class="kpi-sub">inicio periodo</div>
+  </div>
+  <div class="kpi ok">
+    <div class="kpi-label">Val. DF (COP)</div>
+    <div class="kpi-value" id="kpi-val-df">&mdash;</div>
+    <div class="kpi-sub">fin periodo</div>
+  </div>
+  <div class="kpi purple">
+    <div class="kpi-label">Causacion Total</div>
+    <div class="kpi-value" id="kpi-causac">&mdash;</div>
+    <div class="kpi-sub">DF &minus; DI</div>
+  </div>
+  <div class="kpi err">
+    <div class="kpi-label">Alertas Totales</div>
+    <div class="kpi-value" id="kpi-alertas">&mdash;</div>
+    <div class="kpi-sub">precio + causacion</div>
+  </div>
+</div>
+
+<!-- CHARTS SECTION -->
+<div class="panels">
+
+<div class="chart-section">
+  <div class="chart-grid-2">
+    <div class="card">
+      <div class="card-title">Distribucion por Tipo</div>
+      <div id="chart-tipos" style="height:250px;"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Fuentes de Precio Utilizadas</div>
+      <div id="chart-fuentes" style="height:250px;"></div>
+    </div>
+  </div>
+  <div class="chart-grid-2">
+    <div class="card">
+      <div class="card-title">Causacion por Tipo de Activo</div>
+      <div id="chart-causac-tipo" style="height:260px;"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Diferencia Mitra vs Porfin (575)</div>
+      <div id="chart-dif-porfin" style="height:260px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- TAB BAR -->
+<div class="tab-bar" style="margin-top:.5rem;">
+  <button class="tab-btn active" onclick="showTab('tab-posiciones',this)">Posiciones</button>
+  <button class="tab-btn" onclick="showTab('tab-causaciones',this)">Causaciones DI/DF</button>
+  <button class="tab-btn" onclick="showTab('tab-dif-porfin',this)">Diferencias vs Porfin</button>
+  <button class="tab-btn" onclick="showTab('tab-variaciones',this)">Variaciones de Precio</button>
+  <button class="tab-btn" onclick="showTab('tab-monedas',this)">Monedas</button>
+  <button class="tab-btn" onclick="showTab('tab-config',this)">Config</button>
+  <button class="tab-btn" onclick="showTab('tab-logs',this)">Logs</button>
+</div>
+
+<!-- TAB: POSICIONES -->
+<div class="panel active" id="tab-posiciones">
+  <div class="filter-bar" style="margin-bottom:.6rem;">
+    <input type="text" class="tb-inp" id="bus-pos" placeholder="Buscar ISIN/Titulo..." oninput="cargarPosiciones()" style="width:220px;"/>
+    <select class="tb-sel" id="fil-tipo" onchange="cargarPosiciones()"><option value="">Todos los tipos</option></select>
+    <select class="tb-sel" id="fil-fuente" onchange="cargarPosiciones()"><option value="">Todas las fuentes</option></select>
+    <label style="display:flex;align-items:center;gap:.3rem;font-size:.75rem;color:var(--muted);"><input type="checkbox" id="chk-alertas" onchange="cargarPosiciones()"> Solo alertas</label>
+    <label style="display:flex;align-items:center;gap:.3rem;font-size:.75rem;color:var(--muted);"><input type="checkbox" id="chk-curva" onchange="cargarPosiciones()"> Solo curva/TIR</label>
+  </div>
+  <div class="twrap" id="wrap-posiciones"><div class="empty"><span class="spinner"></span></div></div>
+</div>
+
+<!-- TAB: CAUSACIONES -->
+<div class="panel" id="tab-causaciones">
+  <div id="resumen-causac" style="margin-bottom:.75rem;"></div>
+  <div class="twrap" id="wrap-causaciones"><div class="empty"><span class="spinner"></span></div></div>
+</div>
+
+<!-- TAB: DIFERENCIAS vs PORFIN -->
+<div class="panel" id="tab-dif-porfin">
+  <div id="resumen-dif" style="margin-bottom:.75rem;"></div>
+  <div class="twrap" id="wrap-dif"><div class="empty"><span class="spinner"></span></div></div>
+</div>
+
+<!-- TAB: VARIACIONES -->
+<div class="panel" id="tab-variaciones">
+  <div class="twrap" id="wrap-variaciones"><div class="empty">Selecciona dos fechas distintas arriba</div></div>
+</div>
+
+<!-- TAB: MONEDAS -->
+<div class="panel" id="tab-monedas">
+  <div class="twrap" id="wrap-monedas"><div class="empty"><span class="spinner"></span></div></div>
+</div>
+
+<!-- TAB: CONFIG -->
+<div class="panel" id="tab-config">
+  <div class="cfg-section">
+    <div class="cfg-title">Directorio de datos</div>
+    <div class="form-group"><label class="form-label">data_dir</label><input type="text" class="form-input" id="cfg-data-dir" placeholder="Ruta absoluta o relativa..."/></div>
+  </div>
+  <div class="cfg-section">
+    <div class="cfg-title">Umbrales</div>
+    <div class="form-group"><label class="form-label">Umbral variacion precio (%)</label><input type="number" class="form-input" id="cfg-umbral-variacion" step="0.5" min="0" style="width:140px;"/></div>
+    <div class="form-group"><label class="form-label">Umbral dif. causacion (COP)</label><input type="number" class="form-input" id="cfg-umbral-causacion" step="0.1" min="0" style="width:140px;"/></div>
+  </div>
+  <div class="cfg-section">
+    <div class="cfg-title">Servidor</div>
+    <div class="form-group"><label class="form-label">Host</label><input type="text" class="form-input" id="cfg-host" style="width:160px;"/></div>
+    <div class="form-group"><label class="form-label">Puerto</label><input type="number" class="form-input" id="cfg-port" style="width:100px;"/></div>
+  </div>
+  <div style="display:flex;gap:.5rem;align-items:center;">
+    <button class="btn btn-green" onclick="guardarConfig()">Guardar</button>
+    <span id="cfg-msg" style="font-size:.8rem;"></span>
+  </div>
+</div>
+
+<!-- TAB: LOGS -->
+<div class="panel" id="tab-logs">
+  <div class="filter-bar" style="margin-bottom:.5rem;">
+    <button class="btn btn-ghost btn-sm" onclick="cargarLogs()">&#x21BA; Actualizar</button>
+    <label style="display:flex;align-items:center;gap:.3rem;font-size:.75rem;color:var(--muted);"><input type="checkbox" id="log-auto" onchange="toggleLogAuto()"> Auto (5 s)</label>
+    <select class="tb-sel" id="log-level" onchange="filtrarLogs()">
+      <option value="">Todos</option><option value="ERROR">ERROR</option><option value="WARNING">WARNING</option><option value="INFO">INFO</option>
+    </select>
+    <span id="log-count" style="color:var(--muted);font-size:.75rem;"></span>
+  </div>
+  <div class="log-wrap" id="log-wrap"></div>
+</div>
+
+</div><!-- /panels -->
+
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<script src="/static/nav.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>
