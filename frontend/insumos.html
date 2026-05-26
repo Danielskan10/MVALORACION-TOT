@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8"/>
@@ -224,6 +224,8 @@ tr.row-warn:hover td{background:#e3b34122;}
     </div>
     <button class="btn" onclick="recargar()" style="margin-top:14px;">↺ Actualizar</button>
   </div>
+  <button class="btn btn-ghost" id="btn-convertir" onclick="convertirInsumos()" style="margin-left:.5rem;">Convertir insumos</button>
+  <span id="cache-status" style="color:var(--muted);font-size:.72rem;min-width:120px;"></span>
 </nav>
 
 <!-- KPI ROW -->
@@ -546,6 +548,7 @@ const PL={
 
 let _allDates=[], _comparacion=[], _variaciones=[], _curvas=[], _mxData=[], _notasData=[], _mxrvData=[];
 let _spData=[], _swData=[], _tpData=[], _svData=[];
+let _cacheReady=false;
 
 function debounce(fn,ms){let t;return(...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms);};}
 function fmt(v,d=4){if(v==null||isNaN(v))return'—';if(typeof v!=='number')v=Number(v);return v.toLocaleString('es-CO',{minimumFractionDigits:d,maximumFractionDigits:d});}
@@ -562,7 +565,7 @@ function fmtCompact(n){
   if(a>=1e6)return(n/1e6).toFixed(2)+' M';
   return Number(n).toFixed(4);
 }
-async function fetchJSON(u){const r=await fetch(API+u);if(!r.ok)throw new Error(`${r.status}`);return r.json();}
+async function fetchJSON(u,opts){const r=await fetch(API+u,opts);if(!r.ok)throw new Error(`${r.status}`);return r.json();}
 
 // ─── PANEL SWITCH ─────────────────────────────────────────────────────────────
 function mostrarPanel(id,el){
@@ -570,6 +573,14 @@ function mostrarPanel(id,el){
   document.querySelectorAll('.sb-item').forEach(s=>s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   if(el)el.classList.add('active');
+  if(!_cacheReady && id!=='panel-overview'){
+    verificarCache(false);
+    const panel=document.getElementById(id);
+    const empty=panel?.querySelector('.table-wrap, .card, .filter-bar');
+    if(empty&&!panel.querySelector('.cache-warn'))panel.insertAdjacentHTML('afterbegin','<div class="alert-banner warn cache-warn">Convierte los insumos antes de consultar esta vista.</div>');
+    return;
+  }
+  document.querySelectorAll('.cache-warn').forEach(x=>x.remove());
   // Lazy load
   if(id==='panel-sp'&&!_spData.length)cargarSP();
   if(id==='panel-sw'&&!_swData.length)cargarSW();
@@ -590,21 +601,93 @@ async function cargarFechas(){
   const selAnt=document.getElementById('sel-fecha-ant');
   try{
     const d=await fetchJSON('/api/insumos/fechas');
-    _allDates=(d.fechas||[]).slice().reverse();
+    _allDates=(d.fechas||[])
+      .filter(f=>/^\d{8}$/.test(String(f||'')))
+      .sort()
+      .reverse();
     sel.innerHTML=_allDates.map(f=>`<option value="${f}">${fmtF(f)}</option>`).join('');
     selAnt.innerHTML='<option value="">— día anterior —</option>'+_allDates.map(f=>`<option value="${f}">${fmtF(f)}</option>`).join('');
     if(_allDates.length>1)selAnt.value=_allDates[1];
-    if(_allDates.length)recargar();
+    if(_allDates.length)verificarCache(true);
   }catch(e){sel.innerHTML='<option>Error</option>';}
 }
 function fmtF(f){return f?`${f.slice(0,4)}-${f.slice(4,6)}-${f.slice(6)}`:'?';}
 
-function onFecha(){_mxData=[];_notasData=[];_mxrvData=[];_curvas=[];_comparacion=[];_spData=[];_swData=[];_tpData=[];_svData=[];recargar();}
-function onFechaAnt(){cargarVariaciones();}
+function onFecha(){_mxData=[];_notasData=[];_mxrvData=[];_curvas=[];_comparacion=[];_spData=[];_swData=[];_tpData=[];_svData=[];verificarCache(true);}
+function onFechaAnt(){_cacheReady=false;verificarCache(true);}
+
+async function verificarCache(autoLoad=false){
+  const fechas=fechasNecesarias();
+  const status=document.getElementById('cache-status');
+  const btn=document.getElementById('btn-convertir');
+  if(!fechas.length)return false;
+  try{
+    status.textContent='Revisando cache...';
+    const estados=await Promise.all(fechas.map(f=>fetchJSON(`/api/insumos/cache/${f}`)));
+    const completos=estados.filter(d=>d.completo).length;
+    if(completos===estados.length){
+      _cacheReady=true;
+      status.textContent=`Cache listo (${completos}/${estados.length} fechas)`;
+      btn.style.display='none';
+      if(autoLoad)recargar();
+      return true;
+    }
+    _cacheReady=false;
+    status.textContent=`Falta convertir (${completos}/${estados.length} fechas)`;
+    btn.style.display='inline-flex';
+    limpiarVistaSinCache(fechas[0]);
+    return false;
+  }catch(e){
+    status.textContent='No se pudo revisar cache';
+    btn.style.display='inline-flex';
+    return false;
+  }
+}
+
+function fechasNecesarias(){
+  const fecha=document.getElementById('sel-fecha').value;
+  const fa=document.getElementById('sel-fecha-ant').value;
+  return [...new Set([fecha,fa].filter(Boolean))];
+}
+
+function limpiarVistaSinCache(fecha){
+  ['kpi-mx-total','kpi-notas-total','kpi-sb-total','kpi-mxrv-total','kpi-alertas-total','kpi-monedas-total'].forEach(id=>{
+    const el=document.getElementById(id); if(el)el.textContent='—';
+  });
+  const c=document.getElementById('chart-proveedores'); if(c)c.innerHTML=`<div class="empty">Convierte los insumos de ${fmtF(fecha)} para cargar rapido</div>`;
+  const v=document.getElementById('chart-variaciones'); if(v)v.innerHTML='<div class="empty">Pendiente de conversion</div>';
+}
+
+async function convertirInsumos(){
+  const fechas=fechasNecesarias();
+  const status=document.getElementById('cache-status');
+  const btn=document.getElementById('btn-convertir');
+  if(!fechas.length)return;
+  btn.disabled=true;
+  status.textContent='Convirtiendo... puede tardar la primera vez';
+  try{
+    const res=[];
+    for(const f of fechas){
+      status.textContent=`Convirtiendo ${fmtF(f)}...`;
+      res.push(await fetchJSON(`/api/insumos/convertir/${f}?excel=true`,{method:'POST'}));
+    }
+    status.textContent=res.every(x=>x.ok)?'Conversion lista':'Conversion con alertas';
+    await verificarCache(false);
+    recargar();
+  }catch(e){
+    status.textContent=`Error convirtiendo: ${e.message}`;
+  }finally{
+    btn.disabled=false;
+  }
+}
 
 async function recargar(){
   const fecha=document.getElementById('sel-fecha').value;
   if(!fecha)return;
+  if(!_cacheReady){
+    const ok=await verificarCache(false);
+    if(!ok)return;
+  }
   await Promise.all([
     cargarKpis(fecha),
     cargarOverview(fecha),

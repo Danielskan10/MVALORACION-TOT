@@ -15,9 +15,17 @@ _CONFIG_FILE = _ROOT / "config.yaml"
 
 _DEFAULTS: Dict[str, Any] = {
     "data_dir": str(_ROOT / "data"),
+    "infovalmer_dir": r"J:\VALORACION\VALORACION_ESPECIAL\Bolsa\INFOVALMER",
     "umbral_variacion_pct": 5.0,
     "umbral_dif_causacion": 1.0,
+    "umbral_dif_valoracion": 1000.0,
+    "umbral_dif_valoracion_pct": 1.0,
     "port": 8000,
+    "host": "0.0.0.0",
+    "reload": True,
+    "proxy": "",
+    "ssl_cert": "",
+    "ssl_verify": True,
     # Archivos de referencia
     "ref_especies":    str(_ROOT / "data" / "Especies.csv"),
     "ref_fcpe":        str(_ROOT / "data" / "FCPE.xlsx"),

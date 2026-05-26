@@ -52,6 +52,8 @@ def _find_596(fecha: str = "") -> Optional[Path]:
             if not f.is_file():
                 continue
             stem = f.stem.upper()
+            if fecha and fecha not in stem and d == _base_dir():
+                continue
             if re.match(r"^596\d{6,8}$", stem):
                 return f
             if "596" in stem and f.suffix.upper() in (".CSV", ".TXT"):
@@ -60,6 +62,7 @@ def _find_596(fecha: str = "") -> Optional[Path]:
 
 
 def _find_575(fecha: str = "") -> Optional[Path]:
+    fallback_generico = None
     for d in _dirs(fecha):
         if not d.exists():
             continue
@@ -67,11 +70,17 @@ def _find_575(fecha: str = "") -> Optional[Path]:
             if not f.is_file():
                 continue
             stem = f.stem.upper()
+            if fecha and d == _base_dir():
+                compact = re.sub(r"\D", "", stem)
+                if fecha not in compact:
+                    if fallback_generico is None and "575" in stem and f.suffix.upper() in (".CSV", ".TXT"):
+                        fallback_generico = f
+                    continue
             if "575" in stem and f.suffix.upper() in (".CSV", ".TXT"):
                 return f
             if re.match(r"^SKCLI", stem) and f.suffix.upper() in (".CSV", ".TXT"):
                 return f
-    return None
+    return fallback_generico
 
 
 def _read_porfin_csv(path: Path) -> pd.DataFrame:
@@ -214,14 +223,23 @@ def _fechas_disponibles() -> List[str]:
     patron = re.compile(r"(\d{8})")
     if not base.exists():
         return []
-    for f in base.rglob("*"):
-        if f.is_file():
-            m = patron.search(f.name)
-            if m:
-                fechas.add(m.group(1))
     for d in base.iterdir():
         if d.is_dir() and re.match(r"^\d{8}$", d.name):
             fechas.add(d.name)
+    for f in base.iterdir():
+        if not f.is_file():
+            continue
+        stem = f.stem.upper()
+        matches = patron.findall(stem)
+        for fecha in matches:
+            try:
+                pd.to_datetime(fecha, format="%Y%m%d", errors="raise")
+            except Exception:
+                continue
+            if stem.startswith("596") and stem == f"596{fecha}":
+                fechas.add(fecha)
+            elif "575" in stem and fecha in re.sub(r"\D", "", stem):
+                fechas.add(fecha)
     return sorted(fechas)
 
 

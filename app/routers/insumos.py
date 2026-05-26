@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
@@ -17,7 +17,7 @@ import numpy as np
 from fastapi import APIRouter, Query, HTTPException
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from config import get_data_dir
+from config import get_data_dir, get_config
 
 logger = logging.getLogger("insumos")
 router = APIRouter()
@@ -38,27 +38,68 @@ def _num(x):
         return None
 
 
+def _fecha_valida(nombre: str) -> bool:
+    if not re.fullmatch(r"\d{8}", str(nombre)):
+        return False
+    try:
+        dt = datetime.strptime(str(nombre), "%Y%m%d")
+        return 2020 <= dt.year <= 2030
+    except ValueError:
+        return False
+
+
+def _dir_tiene_insumos(d: Path, fecha: str) -> bool:
+    try:
+        sf = datetime.strptime(fecha, "%Y%m%d").strftime("%m%d%y")
+    except ValueError:
+        return False
+    nombres = (
+        f"SP{sf}.001",
+        f"SW{sf}.001",
+        f"SV{sf}.001",
+        f"SB{sf}.001",
+        f"MX{sf}.txt",
+        f"MX{sf}_RV.txt",
+        f"NOTAS_ESTRUCTURADAS_{fecha}.csv",
+        f"titulos_participativos_valoracion_{fecha}.txt",
+        f"monedas_matriz_info_{fecha}.csv",
+    )
+    return any((d / nombre).is_file() for nombre in nombres)
+
+
 def _fechas_disponibles() -> List[str]:
-    base = _base_dir()
-    patron = re.compile(r"^(\d{8})$")
     fechas = set()
-    if not base.exists():
-        return []
-    for d in base.iterdir():
-        if d.is_dir() and patron.match(d.name):
-            fechas.add(d.name)
-    patron2 = re.compile(r"(\d{8})")
-    for f in base.glob("*"):
-        if f.is_file():
-            m = patron2.search(f.stem)
-            if m:
-                fechas.add(m.group(1))
+
+    base = _base_dir()
+    if base.exists():
+        for d in base.iterdir():
+            if d.is_dir() and _fecha_valida(d.name) and _dir_tiene_insumos(d, d.name):
+                fechas.add(d.name)
+
+    infovalmer_base = _get_infovalmer_base()
+    if infovalmer_base.exists():
+        hoy = datetime.today()
+        for i in range(-7, 75):
+            fecha = (hoy - timedelta(days=i)).strftime("%Y%m%d")
+            d = infovalmer_base / fecha
+            if d.is_dir() and _dir_tiene_insumos(d, fecha):
+                fechas.add(fecha)
+
     return sorted(fechas)
 
 
 def _dirs(fecha: str) -> List[Path]:
     base = _base_dir()
-    return [base / fecha, base]
+    infovalmer_base = _get_infovalmer_base()
+    dirs = [base / fecha, infovalmer_base / fecha, base]
+    seen = set()
+    unique = []
+    for d in dirs:
+        key = str(d).lower()
+        if key not in seen:
+            seen.add(key)
+            unique.append(d)
+    return unique
 
 
 def _find_file(fecha: str, patterns: List[str]) -> Optional[Path]:
@@ -90,7 +131,13 @@ def _read_csv_auto(path: Path, **kwargs) -> pd.DataFrame:
 
 # ── Infovalmer J: drive ────────────────────────────────────────────────
 
-_BASE_INFOVALMER = Path(r"J:\VALORACION\VALORACION_ESPECIAL\Bolsa\INFOVALMER")
+def _get_infovalmer_base() -> Path:
+    """Obtiene la ruta base de Infovalmer desde config.yaml"""
+    cfg = get_config()
+    base = Path(cfg.get("infovalmer_dir", ""))
+    if not base or not base.exists():
+        base = Path(r"J:\VALORACION\VALORACION_ESPECIAL\Bolsa\INFOVALMER")
+    return base
 
 
 def _sufijo_fecha(fecha_str: str) -> str:
@@ -99,7 +146,8 @@ def _sufijo_fecha(fecha_str: str) -> str:
 
 
 def _infovalmer_dir(fecha: str) -> Path:
-    return _BASE_INFOVALMER / fecha
+    base = _get_infovalmer_base()
+    return base / fecha
 
 
 def _parse_num(s: str):
@@ -109,7 +157,77 @@ def _parse_num(s: str):
         return None
 
 
-def cargar_sp(fecha: str) -> pd.DataFrame:
+CACHE_PROVEEDORES = ("SP", "SW", "TP", "SV", "MX", "MX_RV", "NOTAS", "SB", "MONEDAS")
+
+
+def _cache_dir(fecha: str) -> Path:
+    return _base_dir() / fecha / "cache_insumos"
+
+
+def _cache_path(fecha: str, proveedor: str, ext: str = "pkl") -> Path:
+    return _cache_dir(fecha) / f"{proveedor}_{fecha}.{ext}"
+
+
+def _leer_cache(fecha: str, proveedor: str) -> Optional[pd.DataFrame]:
+    path = _cache_path(fecha, proveedor, "pkl")
+    if not path.exists():
+        return None
+    try:
+        return pd.read_pickle(path)
+    except Exception as e:
+        logger.warning(f"No se pudo leer cache {path}: {e}")
+        return None
+
+
+def _guardar_cache(fecha: str, proveedor: str, df: pd.DataFrame, export_excel: bool = True) -> Dict[str, Any]:
+    cdir = _cache_dir(fecha)
+    cdir.mkdir(parents=True, exist_ok=True)
+    pkl = _cache_path(fecha, proveedor, "pkl")
+    df.to_pickle(pkl)
+
+    xlsx = _cache_path(fecha, proveedor, "xlsx")
+    excel_ok = False
+    if export_excel:
+        try:
+            df.to_excel(xlsx, index=False)
+            excel_ok = True
+        except Exception as e:
+            logger.warning(f"No se pudo exportar Excel {xlsx}: {e}")
+
+    return {
+        "proveedor": proveedor,
+        "filas": int(len(df)),
+        "pkl": str(pkl),
+        "xlsx": str(xlsx) if excel_ok else None,
+        "cache_ok": True,
+    }
+
+
+def _cache_status(fecha: str) -> Dict[str, Any]:
+    detalle = {}
+    total_ok = 0
+    for proveedor in CACHE_PROVEEDORES:
+        pkl = _cache_path(fecha, proveedor, "pkl")
+        xlsx = _cache_path(fecha, proveedor, "xlsx")
+        ok = pkl.exists()
+        total_ok += int(ok)
+        detalle[proveedor] = {
+            "cache": ok,
+            "excel": xlsx.exists(),
+            "pkl": str(pkl),
+            "xlsx": str(xlsx),
+        }
+    return {
+        "fecha": fecha,
+        "cache_dir": str(_cache_dir(fecha)),
+        "total": len(CACHE_PROVEEDORES),
+        "convertidos": total_ok,
+        "completo": total_ok == len(CACHE_PROVEEDORES),
+        "proveedores": detalle,
+    }
+
+
+def cargar_sp(fecha: str, use_cache: bool = True) -> pd.DataFrame:
     """SP = Bolsa de Valores de Colombia, precios renta fija local (fixed-width .001).
     Columnas según legacy Revisiones_Valoracion:
       l[0:7]   = Numero_Secuencia
@@ -127,6 +245,10 @@ def cargar_sp(fecha: str) -> pd.DataFrame:
       l[179:187]= Tasa
     Filtro de líneas válidas: l[51:53] empieza con "20" (fecha emisión).
     """
+    if use_cache:
+        cached = _leer_cache(fecha, "SP")
+        if cached is not None:
+            return cached
     sf = _sufijo_fecha(fecha)
     path = _infovalmer_dir(fecha) / f"SP{sf}.001"
     if not path.exists():
@@ -168,8 +290,12 @@ def cargar_sp(fecha: str) -> pd.DataFrame:
     return pd.DataFrame(filas)
 
 
-def cargar_sw(fecha: str) -> pd.DataFrame:
+def cargar_sw(fecha: str, use_cache: bool = True) -> pd.DataFrame:
     """SW = Precios secundarios / swap (regex .001)."""
+    if use_cache:
+        cached = _leer_cache(fecha, "SW")
+        if cached is not None:
+            return cached
     sf = _sufijo_fecha(fecha)
     path = _infovalmer_dir(fecha) / f"SW{sf}.001"
     if not path.exists():
@@ -205,8 +331,12 @@ def cargar_sw(fecha: str) -> pd.DataFrame:
     return pd.DataFrame(filas)
 
 
-def cargar_tp(fecha: str) -> pd.DataFrame:
+def cargar_tp(fecha: str, use_cache: bool = True) -> pd.DataFrame:
     """TP = Títulos participativos (fixed-width .txt)."""
+    if use_cache:
+        cached = _leer_cache(fecha, "TP")
+        if cached is not None:
+            return cached
     path = _infovalmer_dir(fecha) / f"titulos_participativos_valoracion_{fecha}.txt"
     if not path.exists():
         return pd.DataFrame()
@@ -217,17 +347,17 @@ def cargar_tp(fecha: str) -> pd.DataFrame:
                 ln = ln.rstrip("\n")
                 if len(ln) < 29:
                     continue
-                precio = _parse_num(ln[19:29])
+                precio_txt = ln[29:].strip()
+                precio = _parse_num(precio_txt)
                 if precio is None:
                     continue
-                isin = ln[7:19].strip().upper()
+                isin = ln[6:19].strip().upper()
                 cod  = ln[0:6].strip().upper()
                 filas.append({
                     "Codigo":      cod,
-                    "Tipo":        ln[6:7].strip(),
+                    "Fecha":       ln[19:29].strip(),
                     "ISIN":        isin,
                     "Precio":      precio,
-                    "Descripcion": ln[29:].strip(),
                     "PRECIO":      precio,
                     "ID":          isin if isin else cod,
                     "FUENTE":      "TP",
@@ -238,7 +368,7 @@ def cargar_tp(fecha: str) -> pd.DataFrame:
     return pd.DataFrame(filas)
 
 
-def cargar_sv(fecha: str) -> pd.DataFrame:
+def cargar_sv(fecha: str, use_cache: bool = True) -> pd.DataFrame:
     """SV = Tasas de interés de referencia (Infovalmer SV{MMDDYY}.001).
     Columnas según legacy:
       l[0:5]  = Codigo
@@ -248,6 +378,10 @@ def cargar_sv(fecha: str) -> pd.DataFrame:
       l[18:33]= Tasa
     Filtro: l[6:8] empieza con "20" (año de la fecha).
     """
+    if use_cache:
+        cached = _leer_cache(fecha, "SV")
+        if cached is not None:
+            return cached
     sf = _sufijo_fecha(fecha)
     path = _infovalmer_dir(fecha) / f"SV{sf}.001"
     if not path.exists():
@@ -278,8 +412,12 @@ def cargar_sv(fecha: str) -> pd.DataFrame:
 
 # ── Cargadores específicos ──────────────────────────────────────────────
 
-def cargar_mx(fecha: str) -> pd.DataFrame:
+def cargar_mx(fecha: str, use_cache: bool = True) -> pd.DataFrame:
     """MX = bonos renta fija internacional (Infovalmer)"""
+    if use_cache:
+        cached = _leer_cache(fecha, "MX")
+        if cached is not None:
+            return cached
     path = _find_file(fecha, [r"^MX\d{6}\.txt$", r"^MX_\d{8}"])
     if not path:
         return pd.DataFrame()
@@ -301,8 +439,12 @@ def cargar_mx(fecha: str) -> pd.DataFrame:
         return pd.DataFrame()
 
 
-def cargar_mx_rv(fecha: str) -> pd.DataFrame:
+def cargar_mx_rv(fecha: str, use_cache: bool = True) -> pd.DataFrame:
     """MX_RV = renta variable internacional (ETFs, ADRs)"""
+    if use_cache:
+        cached = _leer_cache(fecha, "MX_RV")
+        if cached is not None:
+            return cached
     path = _find_file(fecha, [r"^MX\d{6}_RV\.txt$", r"MX.*RV"])
     if not path:
         return pd.DataFrame()
@@ -322,8 +464,12 @@ def cargar_mx_rv(fecha: str) -> pd.DataFrame:
         return pd.DataFrame()
 
 
-def cargar_notas(fecha: str) -> pd.DataFrame:
+def cargar_notas(fecha: str, use_cache: bool = True) -> pd.DataFrame:
     """NOTAS = notas estructuradas"""
+    if use_cache:
+        cached = _leer_cache(fecha, "NOTAS")
+        if cached is not None:
+            return cached
     path = _find_file(fecha, [r"NOTAS_ESTRUCTURADAS.*\.csv", r"NOTAS.*\.csv"])
     if not path:
         return pd.DataFrame()
@@ -344,8 +490,12 @@ def cargar_notas(fecha: str) -> pd.DataFrame:
         return pd.DataFrame()
 
 
-def cargar_sb(fecha: str) -> pd.DataFrame:
+def cargar_sb(fecha: str, use_cache: bool = True) -> pd.DataFrame:
     """SB = betas y curvas de descuento (Infovalmer .001)"""
+    if use_cache:
+        cached = _leer_cache(fecha, "SB")
+        if cached is not None:
+            return cached
     path = _find_file(fecha, [r"^SB\d{6}\.001$"])
     if not path:
         return pd.DataFrame()
@@ -426,8 +576,12 @@ def cargar_indicadores_rv(fecha: str) -> pd.DataFrame:
         return pd.DataFrame()
 
 
-def cargar_monedas(fecha: str) -> pd.DataFrame:
+def cargar_monedas(fecha: str, use_cache: bool = True) -> pd.DataFrame:
     """Tasas de cambio del día"""
+    if use_cache:
+        cached = _leer_cache(fecha, "MONEDAS")
+        if cached is not None:
+            return cached
     path = _find_file(fecha, [r"monedas_matriz_info.*\.csv"])
     if not path:
         # Intentar desde eurofxref
@@ -474,6 +628,58 @@ CARGADORES = {
 
 
 # ── Endpoints ───────────────────────────────────────────────────────────
+
+@router.get("/cache/{fecha}")
+def estado_cache(fecha: str):
+    return _cache_status(fecha)
+
+
+@router.post("/convertir/{fecha}")
+def convertir_insumos(
+    fecha: str,
+    force: bool = Query(False, description="Regenerar aunque ya exista cache"),
+    excel: bool = Query(True, description="Exportar tambien archivos Excel"),
+):
+    """Convierte archivos crudos de Infovalmer a cache local rapido."""
+    raw_loaders = {
+        "SP": cargar_sp,
+        "SW": cargar_sw,
+        "TP": cargar_tp,
+        "SV": cargar_sv,
+        "MX": cargar_mx,
+        "MX_RV": cargar_mx_rv,
+        "NOTAS": cargar_notas,
+        "SB": cargar_sb,
+        "MONEDAS": cargar_monedas,
+    }
+    resultados = []
+    for proveedor, loader in raw_loaders.items():
+        pkl = _cache_path(fecha, proveedor, "pkl")
+        if pkl.exists() and not force:
+            cached = _leer_cache(fecha, proveedor)
+            resultados.append({
+                "proveedor": proveedor,
+                "filas": int(len(cached)) if cached is not None else None,
+                "cache_ok": True,
+                "omitido": True,
+                "pkl": str(pkl),
+                "xlsx": str(_cache_path(fecha, proveedor, "xlsx")),
+            })
+            continue
+        try:
+            df = loader(fecha, use_cache=False)
+            resultados.append(_guardar_cache(fecha, proveedor, df, export_excel=excel))
+        except Exception as e:
+            logger.exception(f"Error convirtiendo {proveedor} {fecha}")
+            resultados.append({"proveedor": proveedor, "filas": 0, "cache_ok": False, "error": str(e)})
+
+    return {
+        "ok": all(r.get("cache_ok") for r in resultados),
+        "fecha": fecha,
+        "status": _cache_status(fecha),
+        "resultados": resultados,
+    }
+
 
 @router.get("/fechas")
 def get_fechas():

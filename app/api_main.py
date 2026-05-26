@@ -42,15 +42,21 @@ app.include_router(mitra.router,   prefix="/api/mitra",   tags=["Mitra"])
 
 # ── Config ─────────────────────────────────────────────────────────────────
 class ConfigUpdate(BaseModel):
-    data_dir:              Optional[str]   = None
-    umbral_variacion_pct:  Optional[float] = None
-    umbral_dif_causacion:  Optional[float] = None
-    port:                  Optional[int]   = None
-    ref_especies:          Optional[str]   = None
-    ref_fcpe:              Optional[str]   = None
-    ref_fiduciaria:        Optional[str]   = None
-    ref_fondos:            Optional[str]   = None
-    ref_fcp:               Optional[str]   = None
+    data_dir:                  Optional[str]   = None
+    infovalmer_dir:            Optional[str]   = None
+    umbral_variacion_pct:      Optional[float] = None
+    umbral_dif_causacion:      Optional[float] = None
+    umbral_dif_valoracion:     Optional[float] = None
+    umbral_dif_valoracion_pct: Optional[float] = None
+    port:                      Optional[int]   = None
+    host:                      Optional[str]   = None
+    proxy:                     Optional[str]   = None
+    ssl_cert:                  Optional[str]   = None
+    ref_especies:              Optional[str]   = None
+    ref_fcpe:                  Optional[str]   = None
+    ref_fiduciaria:            Optional[str]   = None
+    ref_fondos:                Optional[str]   = None
+    ref_fcp:                   Optional[str]   = None
 
 
 @app.get("/api/config", tags=["Config"])
@@ -58,6 +64,7 @@ def get_config_endpoint():
     cfg = get_config()
     # Enriquecer con existencia de cada ruta
     cfg["data_dir_exists"] = os.path.isdir(cfg.get("data_dir", ""))
+    cfg["infovalmer_dir_exists"] = os.path.isdir(cfg.get("infovalmer_dir", ""))
     for key in ["ref_especies", "ref_fcpe", "ref_fiduciaria", "ref_fondos", "ref_fcp"]:
         path = cfg.get(key, "")
         cfg[f"{key}_exists"] = os.path.isfile(path) if path else False
