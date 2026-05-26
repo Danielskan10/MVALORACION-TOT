@@ -38,10 +38,12 @@ logger = logging.getLogger("insumos")
 _LOG_BUFFER: collections.deque = collections.deque(maxlen=500)
 
 
+_FMT = logging.Formatter()
+
 class _BufHandler(logging.Handler):
     def emit(self, record: logging.LogRecord):
         _LOG_BUFFER.append({
-            "ts":    self.formatTime(record, "%H:%M:%S"),
+            "ts":    _FMT.formatTime(record, "%H:%M:%S"),
             "level": record.levelname,
             "msg":   record.getMessage(),
         })

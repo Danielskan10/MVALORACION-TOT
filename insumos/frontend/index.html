@@ -1,9 +1,9 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es" data-theme="dark" data-module="insumos">
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>Insumos — MVALORACION</title>
+<title>Insumos &mdash; MVALORACION</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="/static/design.css"/>
@@ -11,144 +11,381 @@
 <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
 </head>
 <body>
+
+<!-- ═══════════════════════════ NAV ═══════════════════════════ -->
 <nav class="nav">
   <div class="nav-logo"><div class="nav-logo-dot"></div>INSUMOS &middot; MVALORACION</div>
-  <div class="nav-links"><a href="/" class="nav-link active">Insumos</a></div>
+  <div class="nav-links">
+    <a href="http://localhost:8001" class="nav-link active">Insumos</a>
+    <a href="http://localhost:8002" class="nav-link">Porfin</a>
+    <a href="http://localhost:8003" class="nav-link">Mitra</a>
+  </div>
   <div class="nav-right">
-    <div class="nav-status"><div class="nav-status-dot" id="navDot"></div><span id="navStatusTxt">Conectando...</span></div>
-    <button class="nav-icon-btn" id="themeBtn" onclick="toggleTheme()" title="Tema">Moon</button>
+    <button class="btn btn-ghost btn-sm" id="btn-theme" onclick="toggleTheme()" title="Cambiar tema">Moon</button>
   </div>
 </nav>
-<div class="alert-strip" id="alertStrip"></div>
+
+<!-- ═══════════════════════════ TOOLBAR ═══════════════════════ -->
 <div class="toolbar">
-  <div class="fg"><label>Fecha</label><select id="sel-fecha" onchange="onFechaChange()" style="min-width:130px"></select></div>
-  <button class="btn btn-ghost" onclick="onFechaChange()">Actualizar</button>
-  <button class="btn btn-primary" onclick="irTab('conversor')" style="margin-left:auto">Convertir</button>
-</div>
-<div class="kpi-row" style="padding:10px 16px 0">
-  <div class="kpi" onclick="irTab('alertas')" style="--kpi-accent:var(--sk-blue)">
-    <div class="kpi-label">Fecha activa</div><div class="kpi-val" id="kpi-fecha-val">---</div><div class="kpi-sub">seleccionada</div>
+  <div class="tb-group">
+    <span class="tb-label">Fecha</span>
+    <select id="sel-fecha" class="tb-sel" onchange="cargarTodo()"></select>
   </div>
-  <div class="kpi" onclick="irTab('sp')" style="--kpi-accent:var(--sk-green)">
-    <div class="kpi-label">Proveedores</div><div class="kpi-val" id="kpi-proveedores">---</div><div class="kpi-sub" id="kpi-proveedores-sub">disponibles</div>
+  <div class="tb-group">
+    <span class="tb-label">Umbral %</span>
+    <input id="inp-umbral" class="tb-inp" type="number" value="3" min="0.1" step="0.5" style="width:72px;" onchange="cargarTodo()"/>
   </div>
-  <div class="kpi" onclick="irTab('alertas')" style="--kpi-accent:var(--sk-red)">
-    <div class="kpi-label">Alertas Criticas/Altas</div><div class="kpi-val" id="kpi-alertas">---</div><div class="kpi-sub">variaciones precio</div>
-  </div>
-  <div class="kpi" onclick="irTab('alertas')" style="--kpi-accent:var(--sk-orange)">
-    <div class="kpi-label">Total Variaciones</div><div class="kpi-val" id="kpi-total-alertas">---</div><div class="kpi-sub">detectadas</div>
+  <button class="btn btn-ghost btn-sm" onclick="cargarTodo()">Actualizar</button>
+  <div style="margin-left:auto;display:flex;align-items:flex-end;gap:6px;">
+    <span class="tb-label" style="line-height:2.1;">Activa:</span>
+    <span id="lbl-fecha-activa" style="font-size:.8rem;font-weight:700;color:var(--txt);">---</span>
   </div>
 </div>
-<div class="tab-bar" style="margin-top:8px">
-  <button class="tab-btn active" data-tab="alertas"   onclick="irTab('alertas')">Alertas Dia</button>
-  <button class="tab-btn"        data-tab="multidia"  onclick="irTab('multidia')">Multi-Dia</button>
-  <button class="tab-btn"        data-tab="curvas"    onclick="irTab('curvas')">Curvas RF</button>
-  <button class="tab-btn"        data-tab="sp"        onclick="irTab('sp')">SP</button>
-  <button class="tab-btn"        data-tab="sw"        onclick="irTab('sw')">SW</button>
-  <button class="tab-btn"        data-tab="sv"        onclick="irTab('sv')">SV</button>
-  <button class="tab-btn"        data-tab="mx"        onclick="irTab('mx')">MX</button>
-  <button class="tab-btn"        data-tab="notas"     onclick="irTab('notas')">NOTAS</button>
-  <button class="tab-btn"        data-tab="cfg"       onclick="irTab('cfg')">Config</button>
-  <button class="tab-btn"        data-tab="logs"      onclick="irTab('logs')">Logs</button>
-  <button class="tab-btn"        data-tab="conversor" onclick="irTab('conversor')">Conversor</button>
-</div>
-<div style="position:relative;flex:1;display:flex;flex-direction:column;overflow:hidden">
-<div style="flex:1;overflow-y:auto;padding:14px 16px">
 
+<!-- ═══════════════════════ KPI STRIP ═════════════════════════ -->
+<div class="kpi-strip">
+  <div class="kpi b" title="Titulos SP">
+    <div class="kpi-lbl">Titulos SP</div>
+    <div class="kpi-val" id="kpi-titulos">---</div>
+    <div class="kpi-sub">emisiones</div>
+  </div>
+  <div class="kpi g" title="Proveedores disponibles">
+    <div class="kpi-lbl">Proveedores</div>
+    <div class="kpi-val" id="kpi-prov">---</div>
+    <div class="kpi-sub">disponibles</div>
+  </div>
+  <div class="kpi o" title="Precio promedio SP">
+    <div class="kpi-lbl">Precio Prom SP</div>
+    <div class="kpi-val" id="kpi-sp-pm">---</div>
+    <div class="kpi-sub">promedio</div>
+  </div>
+  <div class="kpi p" title="Titulos MX">
+    <div class="kpi-lbl">Titulos MX</div>
+    <div class="kpi-val" id="kpi-mx">---</div>
+    <div class="kpi-sub">internacionales</div>
+  </div>
+  <div class="kpi y" title="Notas estructuradas">
+    <div class="kpi-lbl">NOTAS</div>
+    <div class="kpi-val" id="kpi-notas">---</div>
+    <div class="kpi-sub">estructuradas</div>
+  </div>
+  <div class="kpi" title="Precios SW">
+    <div class="kpi-lbl">Precios SW</div>
+    <div class="kpi-val" id="kpi-sw">---</div>
+    <div class="kpi-sub">secundario</div>
+  </div>
+  <div class="kpi r" title="Total alertas">
+    <div class="kpi-lbl">Total Alertas</div>
+    <div class="kpi-val" id="kpi-alertas">---</div>
+    <div class="kpi-sub">variaciones</div>
+  </div>
+  <div class="kpi r" title="Alertas criticas">
+    <div class="kpi-lbl">Criticas</div>
+    <div class="kpi-val" id="kpi-criticas">---</div>
+    <div class="kpi-sub">&#x2265;3x umbral</div>
+  </div>
+  <div class="kpi" title="Fecha anterior comparada">
+    <div class="kpi-lbl">Fecha ant.</div>
+    <div class="kpi-val" id="kpi-fecha-ant" style="font-size:.9rem;">---</div>
+    <div class="kpi-sub">comparacion</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ BANNER ALERTAS ════════════════════ -->
+<div style="padding:0 14px;margin-top:6px;">
+  <div id="banner-alertas" class="alert-banner ab-ok" style="display:none;"></div>
+</div>
+
+<!-- ═══════════════════════ TAB BAR ══════════════════════════ -->
+<div class="tab-bar" style="padding:0 14px;margin-top:8px;border-bottom:1px solid var(--bdr2);display:flex;gap:2px;flex-wrap:wrap;">
+  <button class="tab-btn active" onclick="showTab('tab-alertas',this)">&#x26A0; Alertas</button>
+  <button class="tab-btn"        onclick="showTab('tab-multidia',this)">Multi-Dia</button>
+  <button class="tab-btn"        onclick="showTab('tab-curvas',this)">Curvas RF</button>
+  <button class="tab-btn"        onclick="showTab('tab-sp',this)">SP</button>
+  <button class="tab-btn"        onclick="showTab('tab-sw',this)">SW</button>
+  <button class="tab-btn"        onclick="showTab('tab-sv',this)">SV</button>
+  <button class="tab-btn"        onclick="showTab('tab-mx',this)">MX</button>
+  <button class="tab-btn"        onclick="showTab('tab-notas',this)">NOTAS</button>
+  <button class="tab-btn"        onclick="showTab('tab-config',this)">Config</button>
+  <button class="tab-btn"        onclick="showTab('tab-conversor',this)">Conversor</button>
+  <button class="tab-btn"        onclick="showTab('tab-logs',this)">Logs</button>
+</div>
+
+<!-- ═══════════════════════ PANELS ════════════════════════════ -->
+<div class="panels">
+
+  <!-- ─── ALERTAS ─── -->
   <div class="panel active" id="tab-alertas">
-    <div class="g2" style="margin-bottom:12px">
-      <div class="card"><div class="card-title">Por severidad <span id="cnt-alertas" style="background:var(--surf3);border:1px solid var(--bdr2);border-radius:4px;padding:1px 6px;font-size:.62rem;color:var(--txt)">0</span></div><div id="chart-alertas-pie" style="height:200px"></div></div>
-      <div class="card"><div class="card-title">Top variaciones %</div><div id="chart-alertas-bar" style="height:200px"></div></div>
+
+    <!-- TOPS: sube / baja -->
+    <div class="tops-grid">
+      <div class="top-card">
+        <div class="top-hdr">
+          <span>&#x25B2; Top Variaciones Alza</span>
+          <span style="color:#FF3B30;">sube</span>
+        </div>
+        <div id="top-sube">
+          <div class="empty">Cargando...</div>
+        </div>
+      </div>
+      <div class="top-card">
+        <div class="top-hdr">
+          <span>&#x25BC; Top Variaciones Baja</span>
+          <span style="color:#00C96E;">baja</span>
+        </div>
+        <div id="top-baja">
+          <div class="empty">Cargando...</div>
+        </div>
+      </div>
     </div>
-    <div class="tab-fb">
-      <div class="fg"><label>Buscar</label><input type="text" id="fil-alerta-busq" placeholder="ISIN / nemotecnico..." oninput="filtrarAlertas()" style="width:200px"/></div>
-      <div class="fg"><label>Severidad</label><select id="fil-alerta-sev" onchange="filtrarAlertas()"><option value="">Todas</option><option value="CRITICA">Critica</option><option value="ALTA">Alta</option><option value="MEDIA">Media</option><option value="BAJA">Baja</option></select></div>
-      <div class="fg"><label>Proveedor</label><select id="fil-alerta-prov" onchange="filtrarAlertas()"><option value="">Todos</option><option value="SP">SP</option><option value="SW">SW</option><option value="SV">SV</option><option value="MX">MX</option></select></div>
+
+    <!-- RALLY CARDS -->
+    <div style="font-size:.62rem;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px;">
+      &#x26A1; Rally &mdash; Mayores variaciones absolutas
     </div>
-    <div id="wrap-alertas"><div class="loading"><span class="spin"></span> Cargando...</div></div>
+    <div class="rally-grid" id="rally-wrap">
+      <div class="empty">Cargando...</div>
+    </div>
+
+    <!-- HEATMAP -->
+    <div style="font-size:.62rem;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px;">
+      Mapa de calor de variaciones
+    </div>
+    <div class="heatmap-grid" id="heatmap-wrap">
+      <div class="empty">Cargando...</div>
+    </div>
+
+    <!-- GRÁFICAS ANALÍTICAS -->
+    <div class="g3" style="margin-top:12px;">
+      <div style="background:var(--surf);border:1px solid var(--bdr2);border-radius:var(--rl);padding:10px;">
+        <div style="font-size:.6rem;font-weight:800;color:var(--muted);text-transform:uppercase;margin-bottom:6px;">Alertas por fuente</div>
+        <div id="chart-por-fuente" style="height:160px;"></div>
+      </div>
+      <div style="background:var(--surf);border:1px solid var(--bdr2);border-radius:var(--rl);padding:10px;">
+        <div style="font-size:.6rem;font-weight:800;color:var(--muted);text-transform:uppercase;margin-bottom:6px;">Distribucion variaciones %</div>
+        <div id="chart-hist-var" style="height:160px;"></div>
+      </div>
+      <div style="background:var(--surf);border:1px solid var(--bdr2);border-radius:var(--rl);padding:10px;">
+        <div style="font-size:.6rem;font-weight:800;color:var(--muted);text-transform:uppercase;margin-bottom:6px;">Precio ant. vs hoy</div>
+        <div id="chart-scatter-var" style="height:160px;"></div>
+      </div>
+    </div>
+
+    <!-- FILTROS + TABLA -->
+    <div class="fb">
+      <input class="tb-inp" id="fil-busq-alertas" type="text" placeholder="Buscar ISIN..." oninput="renderAlertas()" style="width:200px;"/>
+      <select class="tb-sel" id="fil-fuente-alertas" onchange="renderAlertas()">
+        <option value="">Todas las fuentes</option>
+        <option value="SP">SP</option>
+        <option value="SW">SW</option>
+        <option value="SV">SV</option>
+        <option value="MX">MX</option>
+        <option value="NOTAS">NOTAS</option>
+      </select>
+      <select class="tb-sel" id="fil-sev-alertas" onchange="renderAlertas()">
+        <option value="">Toda severidad</option>
+        <option value="CRITICA">Critica</option>
+        <option value="ALTA">Alta</option>
+        <option value="MEDIA">Media</option>
+        <option value="BAJA">Baja</option>
+      </select>
+      <span id="cnt-alertas" style="font-size:.7rem;color:var(--muted);margin-left:4px;">0 filas</span>
+    </div>
+
+    <div class="twrap">
+      <div id="wrap-alertas"><div class="empty">Cargando alertas...</div></div>
+    </div>
   </div>
 
+  <!-- ─── MULTIDIA ─── -->
   <div class="panel" id="tab-multidia">
-    <div class="banner bn-info" style="margin-bottom:10px">Alertas persistentes comparando contra dias anteriores.</div>
-    <div class="tab-fb" style="margin-bottom:10px">
-      <div class="fg"><label>Dias a comparar</label><select id="sel-max-dias" onchange="cargarMultidia()"><option value="3">3 dias</option><option value="5" selected>5 dias</option><option value="10">10 dias</option><option value="20">20 dias</option></select></div>
-      <button class="btn btn-ghost" onclick="cargarMultidia()">Recalcular</button>
+    <div class="fb" style="margin-bottom:10px;">
+      <div class="tb-group">
+        <span class="tb-label">Proveedor</span>
+        <select class="tb-sel" id="sel-prov-md" onchange="recargarMultidia()">
+          <option value="SP">SP</option>
+          <option value="SW">SW</option>
+          <option value="MX">MX</option>
+        </select>
+      </div>
+      <div class="tb-group">
+        <span class="tb-label">Dias atras</span>
+        <input class="tb-inp" id="inp-dias-md" type="number" value="10" min="2" max="30" style="width:64px;" onchange="recargarMultidia()"/>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="recargarMultidia()">Recalcular</button>
     </div>
-    <div class="multiday-grid" id="multiday-cards" style="margin-bottom:12px"></div>
-    <div id="wrap-multidia"><div class="loading"><span class="spin"></span> Cargando...</div></div>
+    <div class="md-grid" id="md-cards"></div>
+    <div style="background:var(--surf);border:1px solid var(--bdr2);border-radius:var(--rl);padding:10px;margin-bottom:12px;">
+      <div id="chart-multidia" style="height:240px;"></div>
+    </div>
+    <div class="twrap">
+      <div id="wrap-multidia"><div class="empty"><span class="spinner"></span></div></div>
+    </div>
   </div>
 
+  <!-- ─── CURVAS RF ─── -->
   <div class="panel" id="tab-curvas">
-    <div class="banner bn-info" style="margin-bottom:10px">SP Renta Fija: TIR vs Plazo por tipo de tasa. Clic en punto abre historico.</div>
-    <div class="curva-ctrl">
-      <div class="fg"><label>Tipo de tasa</label><select id="sel-tipo-tasa" onchange="cargarCurvas()"><option value="">Todos</option><option value="TV">TV</option><option value="TF">TF</option><option value="UVR">UVR</option><option value="IBR">IBR</option></select></div>
-      <button class="btn btn-ghost" onclick="cargarCurvas()">Recargar</button>
-      <span id="curvas-stats" style="font-size:.68rem;color:var(--muted);align-self:flex-end"></span>
+    <div class="fb" id="curva-chips" style="margin-bottom:10px;"></div>
+    <div style="background:var(--surf);border:1px solid var(--bdr2);border-radius:var(--rl);padding:10px;margin-bottom:12px;">
+      <div id="chart-curvas" style="height:340px;"></div>
     </div>
-    <div class="card"><div id="chart-curvas" style="height:380px"></div><div class="curva-legend" id="curvas-leyenda"></div></div>
-  </div>
-
-  <div class="panel" id="tab-sp"><div class="tab-fb"><div class="fg"><label>Buscar</label><input type="text" id="fil-sp-busq" placeholder="ISIN..." oninput="filtrarTabla('SP')" style="width:220px"/></div></div><div id="wrap-sp"><div class="loading"><span class="spin"></span></div></div></div>
-  <div class="panel" id="tab-sw"><div class="tab-fb"><div class="fg"><label>Buscar</label><input type="text" id="fil-sw-busq" placeholder="ISIN..." oninput="filtrarTabla('SW')" style="width:220px"/></div></div><div id="wrap-sw"><div class="loading"><span class="spin"></span></div></div></div>
-  <div class="panel" id="tab-sv"><div class="tab-fb"><div class="fg"><label>Buscar</label><input type="text" id="fil-sv-busq" placeholder="ISIN..." oninput="filtrarTabla('SV')" style="width:220px"/></div></div><div id="wrap-sv"><div class="loading"><span class="spin"></span></div></div></div>
-  <div class="panel" id="tab-mx"><div class="tab-fb"><div class="fg"><label>Buscar</label><input type="text" id="fil-mx-busq" placeholder="ISIN..." oninput="filtrarTabla('MX')" style="width:220px"/></div></div><div id="wrap-mx"><div class="loading"><span class="spin"></span></div></div></div>
-  <div class="panel" id="tab-notas"><div class="tab-fb"><div class="fg"><label>Buscar</label><input type="text" id="fil-notas-busq" placeholder="ISIN..." oninput="filtrarTabla('NOTAS')" style="width:220px"/></div></div><div id="wrap-notas"><div class="loading"><span class="spin"></span></div></div></div>
-
-  <div class="panel" id="tab-cfg">
-    <div class="banner bn-info" style="margin-bottom:14px">Configuracion guardada en config.yaml dentro de la carpeta insumos/.</div>
-    <div class="cfg-section" style="max-width:600px">
-      <div class="cfg-section-title">Rutas</div>
-      <div class="cfg-row"><div class="cfg-field" style="flex:2"><label>Carpeta de datos (data_dir)</label><input type="text" id="cfg-data-dir" placeholder="data"/><div class="hint">Donde se guardan los .pkl procesados</div><div class="cfg-status na" id="st-data-dir">sin verificar</div></div></div>
-      <div class="cfg-row"><div class="cfg-field" style="flex:2"><label>Carpeta base Infovalmer (infovalmer_dir)</label><input type="text" id="cfg-infovalmer-dir" placeholder="J:\VALORACION\...\INFOVALMER"/><div class="hint">Dentro hay subcarpetas YYYYMMDD con los archivos</div><div class="cfg-status na" id="st-infovalmer-dir">sin verificar</div></div></div>
-    </div>
-    <div class="cfg-section" style="max-width:600px">
-      <div class="cfg-section-title">Umbrales</div>
-      <div class="cfg-row"><div class="cfg-field"><label>Variacion precio % (umbral_variacion_pct)</label><input type="number" id="cfg-umbral-var" step="0.01" placeholder="0.5"/><div class="hint">Alerta si variacion mayor a X%</div></div></div>
-    </div>
-    <div class="cfg-section" style="max-width:600px">
-      <div class="cfg-section-title">Servidor</div>
-      <div class="cfg-row"><div class="cfg-field"><label>Host</label><input type="text" id="cfg-host" placeholder="0.0.0.0"/></div><div class="cfg-field"><label>Puerto</label><input type="number" id="cfg-port" placeholder="8001"/></div></div>
-    </div>
-    <div style="display:flex;gap:8px;align-items:center;margin-top:14px">
-      <button class="btn btn-primary" onclick="guardarConfig()">Guardar</button>
-      <button class="btn btn-ghost" onclick="cargarConfig()">Recargar</button>
-      <span id="cfg-save-status" style="font-size:.72rem"></span>
+    <div class="twrap">
+      <div id="wrap-curvas"><div class="empty"><span class="spinner"></span></div></div>
     </div>
   </div>
 
-  <div class="panel" id="tab-logs">
-    <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center">
-      <button class="btn btn-ghost btn-sm" onclick="cargarLogs()">Actualizar</button>
-      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('log-wrap').innerHTML=''">Limpiar</button>
-      <span id="log-count" style="font-size:.65rem;color:var(--muted)"></span>
+  <!-- ─── TABLAS PROVEEDORES ─── -->
+  <div class="panel" id="tab-sp">
+    <div class="fb">
+      <input class="tb-inp" id="fil-busq-sp" type="text" placeholder="Buscar ISIN / NEMO..." oninput="cargarTabla('SP')" style="width:220px;"/>
     </div>
-    <div id="log-wrap" style="background:var(--bg);border:1px solid var(--bdr2);border-radius:var(--rl);max-height:500px;overflow-y:auto;font-family:Menlo,Consolas,monospace"><div class="empty">Cargando logs...</div></div>
+    <div class="twrap"><div id="wrap-sp"><div class="empty"><span class="spinner"></span></div></div></div>
   </div>
 
+  <div class="panel" id="tab-sw">
+    <div class="fb">
+      <input class="tb-inp" id="fil-busq-sw" type="text" placeholder="Buscar..." oninput="cargarTabla('SW')" style="width:220px;"/>
+    </div>
+    <div class="twrap"><div id="wrap-sw"><div class="empty"><span class="spinner"></span></div></div></div>
+  </div>
+
+  <div class="panel" id="tab-sv">
+    <div class="fb">
+      <input class="tb-inp" id="fil-busq-sv" type="text" placeholder="Buscar..." oninput="cargarTabla('SV')" style="width:220px;"/>
+    </div>
+    <div class="twrap"><div id="wrap-sv"><div class="empty"><span class="spinner"></span></div></div></div>
+  </div>
+
+  <div class="panel" id="tab-mx">
+    <div class="fb">
+      <input class="tb-inp" id="fil-busq-mx" type="text" placeholder="Buscar ISIN..." oninput="cargarTabla('MX')" style="width:220px;"/>
+    </div>
+    <div class="twrap"><div id="wrap-mx"><div class="empty"><span class="spinner"></span></div></div></div>
+  </div>
+
+  <div class="panel" id="tab-notas">
+    <div class="fb">
+      <input class="tb-inp" id="fil-busq-notas" type="text" placeholder="Buscar..." oninput="cargarTabla('NOTAS')" style="width:220px;"/>
+    </div>
+    <div class="twrap"><div id="wrap-notas"><div class="empty"><span class="spinner"></span></div></div></div>
+  </div>
+
+  <!-- ─── CONFIG ─── -->
+  <div class="panel" id="tab-config">
+    <div style="max-width:640px;">
+      <div class="cfg-section">
+        <div class="cfg-title">Rutas</div>
+        <div class="form-group">
+          <label class="form-label">Carpeta de datos (data_dir)</label>
+          <input class="form-input" id="cfg-data-dir" type="text" placeholder="data"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Carpeta Infovalmer (infovalmer_dir)</label>
+          <input class="form-input" id="cfg-infovalmer" type="text" placeholder="J:\VALORACION\...\INFOVALMER"/>
+        </div>
+      </div>
+      <div class="cfg-section">
+        <div class="cfg-title">Umbrales</div>
+        <div class="form-group">
+          <label class="form-label">Umbral variacion % (umbral_variacion_pct)</label>
+          <input class="form-input" id="cfg-umbral" type="number" step="0.1" placeholder="3" style="width:120px;"/>
+        </div>
+      </div>
+      <div class="cfg-section">
+        <div class="cfg-title">Servidor</div>
+        <div style="display:flex;gap:10px;">
+          <div class="form-group" style="flex:1;">
+            <label class="form-label">Host</label>
+            <input class="form-input" id="cfg-host" type="text" placeholder="0.0.0.0"/>
+          </div>
+          <div class="form-group" style="width:100px;">
+            <label class="form-label">Puerto</label>
+            <input class="form-input" id="cfg-port" type="number" placeholder="8001"/>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="btn btn-primary btn-sm" onclick="guardarConfig()">Guardar</button>
+        <button class="btn btn-ghost btn-sm" onclick="cargarConfig()">Recargar</button>
+        <span id="cfg-msg" style="font-size:.72rem;"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── CONVERSOR ─── -->
   <div class="panel" id="tab-conversor">
-    <div class="banner bn-info" style="margin-bottom:14px">Convierte archivos Infovalmer (.001, .txt) a .pkl para la fecha seleccionada.</div>
-    <div class="cfg-section" style="max-width:480px">
-      <div class="cfg-section-title">Conversion para: <strong id="conv-fecha-display">---</strong></div>
-      <div id="conv-status-msg" style="font-size:.76rem;color:var(--muted2);margin-bottom:10px">Listo.</div>
-      <div id="conv-result" style="font-size:.72rem;color:var(--muted2);line-height:1.8;margin-bottom:12px"></div>
-      <button class="btn btn-primary" id="btn-convertir" onclick="convertirArchivos()">Convertir archivos</button>
+    <div style="max-width:520px;">
+      <div class="cfg-section">
+        <div class="cfg-title">Convertir archivos Infovalmer</div>
+        <p style="font-size:.75rem;color:var(--muted2);margin-bottom:12px;">
+          Convierte archivos .001 / .txt de la carpeta Infovalmer para la fecha seleccionada y genera caches .pkl.
+        </p>
+        <div class="form-group">
+          <label class="form-label">Fecha a convertir</label>
+          <input class="form-input" id="conv-fecha" type="text" placeholder="YYYYMMDD" style="width:150px;"/>
+        </div>
+        <div class="prog-bar" style="margin-bottom:10px;">
+          <div class="prog-fill" id="conv-fill"></div>
+        </div>
+        <div id="conv-msg" style="font-size:.76rem;color:var(--muted2);min-height:1.2em;margin-bottom:10px;"></div>
+        <button class="btn btn-primary btn-sm" onclick="convertirFecha()">Convertir</button>
+      </div>
+      <div id="conv-tabla"></div>
     </div>
   </div>
 
-</div>
-<div class="hist-panel" id="hist-panel">
-  <div class="hist-header"><h3 id="hist-title">Historico</h3><button class="hist-close" onclick="closeHistPanel()">X</button></div>
-  <div class="hist-body" id="hist-body"><div class="loading"><span class="spin"></span></div></div>
-</div>
+  <!-- ─── LOGS ─── -->
+  <div class="panel" id="tab-logs">
+    <div class="fb" style="margin-bottom:8px;">
+      <button class="btn btn-ghost btn-sm" onclick="cargarLogs()">Actualizar</button>
+      <label style="display:flex;align-items:center;gap:5px;font-size:.72rem;color:var(--muted);cursor:pointer;">
+        <input type="checkbox" id="log-auto" onchange="toggleLogAuto()"/> Auto 5s
+      </label>
+      <select class="tb-sel" id="log-nivel" onchange="filtrarLogs()">
+        <option value="">Todos</option>
+        <option value="INFO">INFO</option>
+        <option value="WARNING">WARNING</option>
+        <option value="ERROR">ERROR</option>
+      </select>
+      <span id="log-cnt" style="font-size:.7rem;color:var(--muted);"></span>
+    </div>
+    <div class="log-wrap" id="log-wrap">
+      <div class="empty">Cargando logs...</div>
+    </div>
+  </div>
+
+</div><!-- /panels -->
+
+<!-- ═══════════════════ SLIDE PANEL (historial) ═══════════════ -->
+<div class="slide-panel" id="slide-hist">
+  <div class="sp-hdr">
+    <div>
+      <h3 id="sp-titulo">Historico</h3>
+      <div style="font-size:.62rem;color:var(--muted);margin-top:2px;" id="sp-fuente"></div>
+    </div>
+    <button class="btn btn-ghost btn-sm" onclick="cerrarHistorial()">&#x2715; Cerrar</button>
+  </div>
+  <div class="sp-body" id="sp-body">
+    <div class="empty"><span class="spinner"></span></div>
+  </div>
 </div>
 
+<!-- ═══════════════════ SCRIPTS ═══════════════════════════════ -->
 <script src="/static/nav.js"></script>
 <script src="/static/app.js"></script>
 <script>
-document.getElementById('sel-fecha').addEventListener('change', function() {
-  var f = document.getElementById('sel-fecha').value;
-  var el = document.getElementById('conv-fecha-display');
-  if (el) el.textContent = f ? f.slice(0,4)+'-'+f.slice(4,6)+'-'+f.slice(6) : '---';
+// Sincronizar fecha inicial al conv-fecha cuando carga
+document.addEventListener('DOMContentLoaded', function() {
+  var sel = document.getElementById('sel-fecha');
+  if (sel) {
+    sel.addEventListener('change', function() {
+      var cf = document.getElementById('conv-fecha');
+      if (cf && !cf.value) cf.value = sel.value;
+    });
+  }
+  // Mostrar banner cuando hay datos
+  var banner = document.getElementById('banner-alertas');
+  if (banner) banner.style.display = '';
 });
 </script>
 </body>
