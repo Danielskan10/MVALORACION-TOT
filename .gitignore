@@ -8,17 +8,31 @@ env/
 .venv/
 .env/
 
-# ── Configuración local (contiene rutas y posibles credenciales) ─────────────
+# ── Configuración local (contiene rutas corporativas) ─────────────────────────
 config.yaml
 config.local.yaml
 secrets.yaml
 .env
 *.local.yaml
 
-# ── Datos financieros (nunca subir al repo) ───────────────────────────────────
+# ── Datos financieros (NUNCA subir al repo) ───────────────────────────────────
 data/
 outputs/
 logs/
+
+# ── Código legado ─────────────────────────────────────────────────────────────
+legacy/
+
+# ── Notebooks / docs internos ─────────────────────────────────────────────────
+notebooks/
+docs/
+
+# ── Scripts de instalación con rutas locales ──────────────────────────────────
+setup.ps1
+install.ps1
+
+# ── Carpeta de migración antigua (subida por error) ───────────────────────────
+MVALORACION-TOT/
 
 # ── Python ────────────────────────────────────────────────────────────────────
 __pycache__/
@@ -36,12 +50,9 @@ build/
 .ipynb_checkpoints/
 *.ipynb
 
-# ── Archivos generados por la app ─────────────────────────────────────────────
-# Observaciones: se guardan en data/ (ya excluido)
-# Excels exportados
+# ── Archivos generados / exportados ───────────────────────────────────────────
 *.xlsx
 *.xls
-!config.yaml.example
 
 # ── OS ────────────────────────────────────────────────────────────────────────
 .DS_Store
@@ -49,9 +60,10 @@ Thumbs.db
 desktop.ini
 ehthumbs.db
 
-# ── Editores ──────────────────────────────────────────────────────────────────
+# ── Editores / agentes ────────────────────────────────────────────────────────
 .vscode/
 .idea/
+.claude/
 *.swp
 *.swo
 *~
@@ -68,6 +80,3 @@ geckodriver*
 *.crt
 *.pfx
 MVALORACION.bat
-
-# ── Legacy (carpeta de archivos históricos — no forman parte del repo) ────────
-# legacy/  ← descomenta si quieres excluir la carpeta legacy
