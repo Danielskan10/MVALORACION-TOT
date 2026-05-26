@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark" data-module="insumos">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Insumos — MVALORACION</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+<!-- Design System Skandia -->
+<link rel="stylesheet" href="/static/shared/design.css"/>
+<!-- Estilos propios del módulo -->
+<link rel="stylesheet" href="/static/modules/insumos/style.css"/>
+<!-- Plotly -->
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════
+     NAVBAR
+══════════════════════════════════════════════════════ -->
+<nav class="nav">
+  <div class="nav-logo">
+    <div class="nav-logo-dot"></div>
+    MVALORACION
+  </div>
+  <div class="nav-links">
+    <a href="/"              class="nav-link">🏠 Dashboard</a>
+    <a href="/insumos.html"  class="nav-link active">📊 Insumos</a>
+    <a href="/porfin.html"   class="nav-link">📋 Porfin</a>
+    <a href="/mitra.html"    class="nav-link">⚡ Mitra</a>
+  </div>
+  <div class="nav-right">
+    <div class="nav-status">
+      <div class="nav-status-dot" id="navDot"></div>
+      <span id="navStatusTxt">Conectando…</span>
+    </div>
+    <button class="nav-icon-btn" id="themeBtn" onclick="toggleTheme()" title="Cambiar tema">🌙</button>
+    <a href="/" class="nav-icon-btn" title="Configuración" style="display:flex;align-items:center;justify-content:center;text-decoration:none">⚙️</a>
+  </div>
+</nav>
+
+<!-- Alerta strip (críticas) -->
+<div class="alert-strip" id="alertStrip"></div>
+
+<!-- ══════════════════════════════════════════════════════
+     TOOLBAR
+══════════════════════════════════════════════════════ -->
+<div class="toolbar">
+  <div class="fg">
+    <label>Fecha</label>
+    <select id="sel-fecha" onchange="onFechaChange()" style="min-width:130px"></select>
+  </div>
+  <button class="btn btn-ghost" onclick="onFechaChange()">🔄 Actualizar</button>
+  <button class="btn btn-primary" onclick="irTab('conversor')" style="margin-left:auto">📥 Convertir archivos</button>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     KPI ROW
+══════════════════════════════════════════════════════ -->
+<div class="kpi-row" style="padding:10px 16px 0">
+  <div class="kpi" id="kpi-fecha" onclick="irTab('alertas')" style="--kpi-accent:var(--sk-blue)">
+    <div class="kpi-label">Fecha activa</div>
+    <div class="kpi-val" id="kpi-fecha-val">—</div>
+    <div class="kpi-sub">seleccionada</div>
+  </div>
+  <div class="kpi" id="kpi-proveedores" onclick="irTab('sp')" style="--kpi-accent:var(--sk-green)">
+    <div class="kpi-label">Proveedores</div>
+    <div class="kpi-val" id="kpi-proveedores">—</div>
+    <div class="kpi-sub">disponibles</div>
+  </div>
+  <div class="kpi" id="kpi-alertas-wrap" onclick="irTab('alertas')" style="--kpi-accent:var(--sk-red)">
+    <div class="kpi-label">Alertas Críticas/Altas</div>
+    <div class="kpi-val" id="kpi-alertas">—</div>
+    <div class="kpi-sub">variaciones precio</div>
+  </div>
+  <div class="kpi" id="kpi-total-alertas-wrap" onclick="irTab('alertas')" style="--kpi-accent:var(--sk-orange)">
+    <div class="kpi-label">Total Variaciones</div>
+    <div class="kpi-val" id="kpi-total-alertas">—</div>
+    <div class="kpi-sub">detectadas</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     TAB BAR
+══════════════════════════════════════════════════════ -->
+<div class="tab-bar" style="margin-top:8px">
+  <button class="tab-btn active" data-tab="alertas"  onclick="irTab('alertas')">🚨 Alertas Día</button>
+  <button class="tab-btn"        data-tab="multidia" onclick="irTab('multidia')">📅 Multi-Día</button>
+  <button class="tab-btn"        data-tab="curvas"   onclick="irTab('curvas')">📈 Curvas RF</button>
+  <button class="tab-btn"        data-tab="sp"       onclick="irTab('sp')">SP · Renta Fija</button>
+  <button class="tab-btn"        data-tab="sw"       onclick="irTab('sw')">SW</button>
+  <button class="tab-btn"        data-tab="sv"       onclick="irTab('sv')">SV</button>
+  <button class="tab-btn"        data-tab="mx"       onclick="irTab('mx')">MX</button>
+  <button class="tab-btn"        data-tab="notas"    onclick="irTab('notas')">NOTAS</button>
+  <button class="tab-btn"        data-tab="conversor" onclick="irTab('conversor')">🔧 Conversor</button>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     MAIN + PANEL HISTÓRICO
+══════════════════════════════════════════════════════ -->
+<div class="main-wrap" style="position:relative">
+<div class="page-body">
+
+  <!-- ── TAB: ALERTAS ───────────────────────────────── -->
+  <div class="panel active" id="tab-alertas">
+    <div class="g2" style="margin-bottom:12px">
+      <div class="card">
+        <div class="card-title">🔴 Por severidad <span class="cnt" id="cnt-alertas">0</span></div>
+        <div id="chart-alertas-pie" style="height:200px"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">📊 Top variaciones %</div>
+        <div id="chart-alertas-bar" style="height:200px"></div>
+      </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="tab-fb">
+      <div class="fg">
+        <label>Buscar</label>
+        <input type="text" id="fil-alerta-busq" placeholder="ISIN / nemotécnico…" oninput="filtrarAlertas()" style="width:200px"/>
+      </div>
+      <div class="fg">
+        <label>Severidad</label>
+        <select id="fil-alerta-sev" onchange="filtrarAlertas()">
+          <option value="">Todas</option>
+          <option value="CRITICA">🔴 Crítica</option>
+          <option value="ALTA">🟠 Alta</option>
+          <option value="MEDIA">🟡 Media</option>
+          <option value="BAJA">🟢 Baja</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label>Proveedor</label>
+        <select id="fil-alerta-prov" onchange="filtrarAlertas()">
+          <option value="">Todos</option>
+          <option value="SP">SP</option>
+          <option value="SW">SW</option>
+          <option value="SV">SV</option>
+          <option value="MX">MX</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="wrap-alertas">
+      <div class="loading"><span class="spin"></span> Cargando…</div>
+    </div>
+  </div>
+
+  <!-- ── TAB: MULTI-DÍA ────────────────────────────── -->
+  <div class="panel" id="tab-multidia">
+    <div class="banner bn-info" style="margin-bottom:10px">
+      📅 Compara las alertas de precio contra días anteriores para detectar variaciones persistentes.
+    </div>
+    <div class="tab-fb" style="margin-bottom:10px">
+      <div class="fg">
+        <label>Días a comparar</label>
+        <select id="sel-max-dias" onchange="cargarMultidia()">
+          <option value="3">3 días</option>
+          <option value="5" selected>5 días</option>
+          <option value="10">10 días</option>
+          <option value="20">20 días</option>
+        </select>
+      </div>
+      <button class="btn btn-ghost" onclick="cargarMultidia()">🔄 Recalcular</button>
+    </div>
+
+    <!-- Mini cards por fecha -->
+    <div class="multiday-grid" id="multiday-cards" style="margin-bottom:12px"></div>
+
+    <div id="wrap-multidia">
+      <div class="loading"><span class="spin"></span> Cargando…</div>
+    </div>
+  </div>
+
+  <!-- ── TAB: CURVAS RENTA FIJA ─────────────────────── -->
+  <div class="panel" id="tab-curvas">
+    <div class="banner bn-info" style="margin-bottom:10px">
+      📈 <strong>Renta Fija (SP)</strong> — Scatter TIR vs Plazo agrupado por tipo de tasa. Clic en un punto para ver el histórico de ese título.
+    </div>
+
+    <div class="curva-ctrl">
+      <div class="fg">
+        <label>Tipo de tasa</label>
+        <select id="sel-tipo-tasa" onchange="cargarCurvas()">
+          <option value="">Todos</option>
+          <option value="TV">TV — Tasa Variable</option>
+          <option value="TF">TF — Tasa Fija</option>
+          <option value="UVR">UVR</option>
+          <option value="IBR">IBR</option>
+        </select>
+      </div>
+      <button class="btn btn-ghost" onclick="cargarCurvas()">🔄 Recargar</button>
+      <span id="curvas-stats" style="font-size:.68rem;color:var(--muted);align-self:flex-end"></span>
+    </div>
+
+    <div class="card" style="margin-bottom:10px">
+      <div id="chart-curvas" style="height:380px"></div>
+      <div class="curva-legend" id="curvas-leyenda"></div>
+    </div>
+  </div>
+
+  <!-- ── TAB: SP ────────────────────────────────────── -->
+  <div class="panel" id="tab-sp">
+    <div class="tab-fb">
+      <div class="fg">
+        <label>Buscar</label>
+        <input type="text" id="fil-sp-busq" placeholder="ISIN / nemotécnico…" oninput="filtrarTabla('SP')" style="width:220px"/>
+      </div>
+    </div>
+    <div id="wrap-sp"><div class="loading"><span class="spin"></span></div></div>
+  </div>
+
+  <!-- ── TAB: SW ────────────────────────────────────── -->
+  <div class="panel" id="tab-sw">
+    <div class="tab-fb">
+      <div class="fg">
+        <label>Buscar</label>
+        <input type="text" id="fil-sw-busq" placeholder="ISIN / nemotécnico…" oninput="filtrarTabla('SW')" style="width:220px"/>
+      </div>
+    </div>
+    <div id="wrap-sw"><div class="loading"><span class="spin"></span></div></div>
+  </div>
+
+  <!-- ── TAB: SV ────────────────────────────────────── -->
+  <div class="panel" id="tab-sv">
+    <div class="tab-fb">
+      <div class="fg">
+        <label>Buscar</label>
+        <input type="text" id="fil-sv-busq" placeholder="ISIN / nemotécnico…" oninput="filtrarTabla('SV')" style="width:220px"/>
+      </div>
+    </div>
+    <div id="wrap-sv"><div class="loading"><span class="spin"></span></div></div>
+  </div>
+
+  <!-- ── TAB: MX ────────────────────────────────────── -->
+  <div class="panel" id="tab-mx">
+    <div class="tab-fb">
+      <div class="fg">
+        <label>Buscar</label>
+        <input type="text" id="fil-mx-busq" placeholder="ISIN / descripción…" oninput="filtrarTabla('MX')" style="width:220px"/>
+      </div>
+    </div>
+    <div id="wrap-mx"><div class="loading"><span class="spin"></span></div></div>
+  </div>
+
+  <!-- ── TAB: NOTAS ─────────────────────────────────── -->
+  <div class="panel" id="tab-notas">
+    <div class="tab-fb">
+      <div class="fg">
+        <label>Buscar</label>
+        <input type="text" id="fil-notas-busq" placeholder="ISIN / descripción…" oninput="filtrarTabla('NOTAS')" style="width:220px"/>
+      </div>
+    </div>
+    <div id="wrap-notas"><div class="loading"><span class="spin"></span></div></div>
+  </div>
+
+  <!-- ── TAB: CONVERSOR ────────────────────────────── -->
+  <div class="panel" id="tab-conversor">
+    <div class="banner bn-info" style="margin-bottom:14px">
+      🔧 <strong>Conversor de archivos Infovalmer</strong> — Convierte los archivos de ancho fijo (.001, .txt) a formato procesable (.pkl / .xlsx) para la fecha seleccionada. Solo necesitas hacer esto una vez por fecha.
+    </div>
+
+    <div class="cfg-section" style="max-width:500px">
+      <div class="cfg-section-title">⚙️ Conversión para la fecha activa</div>
+      <p style="font-size:.76rem;color:var(--muted2);margin-bottom:14px">
+        Fecha seleccionada: <strong id="conv-fecha-display">—</strong><br>
+        La conversión lee los archivos crudos de Infovalmer y genera los <code>.pkl</code> optimizados.
+      </p>
+      <div class="conv-status" id="conv-status-msg">Listo para convertir.</div>
+      <div class="conv-result" id="conv-result"></div>
+      <div style="margin-top:12px">
+        <button class="btn btn-primary" id="btn-convertir" onclick="convertirArchivos()">
+          🔄 Convertir archivos de esta fecha
+        </button>
+      </div>
+    </div>
+  </div>
+
+</div><!-- page-body -->
+
+<!-- ══════════════════════════════════════════════════════
+     PANEL HISTÓRICO (slide lateral)
+══════════════════════════════════════════════════════ -->
+<div class="hist-panel" id="hist-panel">
+  <div class="hist-header">
+    <h3 id="hist-title">Histórico</h3>
+    <button class="hist-close" onclick="closeHistPanel()">✕</button>
+  </div>
+  <div class="hist-body" id="hist-body">
+    <div class="loading"><span class="spin"></span> Cargando…</div>
+  </div>
+</div>
+
+</div><!-- main-wrap -->
+
+<!-- Shared JS (theme, nav, utils) -->
+<script src="/static/shared/nav.js"></script>
+<!-- Lógica del módulo -->
+<script src="/static/modules/insumos/app.js"></script>
+
+<script>
+  // Sync fecha display en conversor
+  document.getElementById('sel-fecha').addEventListener('change', () => {
+    const f = document.getElementById('sel-fecha').value;
+    const el = document.getElementById('conv-fecha-display');
+    if (el) el.textContent = f ? `${f.slice(0,4)}-${f.slice(4,6)}-${f.slice(6)}` : '—';
+  });
+</script>
+
+</body>
+</html>

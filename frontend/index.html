@@ -1,586 +1,718 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" data-theme="dark">
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>MVALORACION — Control Operativo</title>
-<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<title>MVALORACION — Dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="/static/shared.css"/>
 <style>
-:root{
-  --bg:#080c10;--surface:#0d1117;--surface2:#161b22;--surface3:#21262d;
-  --border:#21262d;--border2:#30363d;--text:#e6edf3;--muted:#6e7681;--muted2:#8b949e;
-  --green:#2ea043;--green2:#3fb950;--blue:#1f6feb;--blue2:#58a6ff;
-  --orange:#d18616;--orange2:#f0883e;--red:#b91c1c;--red2:#f85149;
-  --purple:#6e40c9;--purple2:#bc8cff;--yellow:#9e6a03;--yellow2:#e3b341;
-  --accent:#1f6feb;--accent-hover:#388bfd;
-  --radius:8px;--radius-lg:12px;
-}
-*{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;}
-::-webkit-scrollbar{width:6px;height:6px;}
-::-webkit-scrollbar-track{background:var(--surface);}
-::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
+body { display: flex; flex-direction: column; min-height: 100vh; }
+.main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.page-body { flex: 1; overflow-y: auto; padding: 16px; }
 
-/* NAV */
-nav{
-  background:var(--surface);border-bottom:1px solid var(--border2);
-  padding:0 1.5rem;display:flex;align-items:center;gap:1rem;
-  height:52px;position:sticky;top:0;z-index:200;
-  backdrop-filter:blur(12px);
+/* Módulos grid */
+.module-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px; margin-bottom: 16px;
 }
-.nav-brand{font-weight:800;font-size:.95rem;color:var(--text);letter-spacing:.06em;
-  display:flex;align-items:center;gap:.5rem;text-decoration:none;white-space:nowrap;}
-.nav-brand .dot{width:8px;height:8px;border-radius:50%;background:var(--blue2);}
-.nav-sep{width:1px;height:20px;background:var(--border2);}
-.nav-links{display:flex;gap:.15rem;flex:1;}
-.nav-links a{
-  color:var(--muted2);text-decoration:none;padding:.35rem .75rem;
-  border-radius:var(--radius);font-size:.8rem;font-weight:500;
-  transition:all .15s;display:flex;align-items:center;gap:.35rem;
+.module-card {
+  background: var(--surf); border: 1px solid var(--bdr2);
+  border-radius: var(--rl); padding: 18px; cursor: pointer;
+  transition: var(--tr); position: relative; overflow: hidden;
+  text-decoration: none; color: inherit; display: block;
 }
-.nav-links a:hover{background:var(--surface2);color:var(--text);}
-.nav-links a.active{background:var(--surface3);color:var(--text);}
-.nav-links a .icon{font-size:.9rem;}
-.nav-end{display:flex;align-items:center;gap:.5rem;margin-left:auto;}
+.module-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: var(--mc-color, var(--sk-green));
+}
+.module-card:hover { border-color: var(--mc-color, var(--sk-green)); transform: translateY(-1px); }
+.module-card .mc-icon { font-size: 1.8rem; margin-bottom: 10px; }
+.module-card .mc-title { font-size: .9rem; font-weight: 700; margin-bottom: 4px; }
+.module-card .mc-desc { font-size: .72rem; color: var(--muted); line-height: 1.5; }
+.module-card .mc-status {
+  display: flex; align-items: center; gap: 5px;
+  font-size: .64rem; color: var(--muted); margin-top: 12px;
+}
+.module-card .mc-status-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+}
 
-/* BTNS */
-.btn{
-  background:var(--accent);color:#fff;border:none;padding:.4rem 1rem;
-  border-radius:var(--radius);font-size:.8rem;font-weight:600;cursor:pointer;
-  font-family:inherit;transition:all .15s;white-space:nowrap;
-  display:inline-flex;align-items:center;gap:.35rem;
+/* Log viewer */
+.log-wrap {
+  background: var(--bg); border: 1px solid var(--bdr2);
+  border-radius: var(--rl); max-height: 380px; overflow-y: auto;
+  font-family: 'Menlo','Consolas',monospace;
 }
-.btn:hover{background:var(--accent-hover);}
-.btn-ghost{background:transparent;color:var(--muted2);border:1px solid var(--border2);}
-.btn-ghost:hover{background:var(--surface2);color:var(--text);border-color:var(--border2);}
-.btn-icon{
-  background:transparent;border:1px solid var(--border2);color:var(--muted2);
-  width:32px;height:32px;border-radius:var(--radius);cursor:pointer;
-  display:flex;align-items:center;justify-content:center;font-size:.9rem;
-  transition:all .15s;
+.log-empty { padding: 2rem; text-align: center; color: var(--muted); font-size: .75rem; }
+.log-controls { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.log-level-filter { display: flex; gap: 4px; }
+.log-level-filter .lf {
+  padding: .15rem .45rem; border-radius: 4px; font-size: .64rem; font-weight: 700;
+  cursor: pointer; opacity: .4; border: 1px solid var(--bdr2); background: none; font-family: inherit;
+  color: var(--muted);
 }
-.btn-icon:hover{border-color:var(--blue2);color:var(--text);}
+.log-level-filter .lf.on { opacity: 1; }
+.lf-info.on  { color: var(--sk-green); border-color: var(--sk-green); background: rgba(0,166,90,.1); }
+.lf-warn.on  { color: var(--sk-orange); border-color: var(--sk-orange); background: rgba(255,149,0,.1); }
+.lf-error.on { color: var(--sk-red); border-color: var(--sk-red); background: rgba(255,59,48,.1); }
 
-/* HERO */
-.hero{
-  padding:3.5rem 2rem 2rem;
-  background:radial-gradient(ellipse 80% 60% at 50% -20%,#1f6feb18 0%,transparent 70%);
-  border-bottom:1px solid var(--border2);
-}
-.hero-inner{max-width:1100px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:2rem;flex-wrap:wrap;}
-.hero h1{font-size:2rem;font-weight:800;line-height:1.2;margin-bottom:.5rem;}
-.hero h1 span{
-  background:linear-gradient(90deg,var(--blue2),var(--purple2));
-  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
-}
-.hero p{color:var(--muted2);font-size:.9rem;max-width:520px;line-height:1.6;}
-.hero-badge{
-  display:inline-flex;align-items:center;gap:.4rem;padding:.3rem .8rem;
-  background:var(--surface2);border:1px solid var(--border2);border-radius:20px;
-  font-size:.72rem;font-weight:600;color:var(--muted2);margin-bottom:1rem;
-}
-.hero-badge .dot{width:6px;height:6px;border-radius:50%;background:var(--green2);
-  box-shadow:0 0 6px var(--green2);}
-
-/* DATE BAR */
-.date-bar{
-  background:var(--surface);border-bottom:1px solid var(--border2);
-  padding:.75rem 2rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap;
-}
-.date-bar label{color:var(--muted);font-size:.75rem;font-weight:500;text-transform:uppercase;letter-spacing:.06em;}
-.date-bar select{
-  background:var(--surface2);border:1px solid var(--border2);color:var(--text);
-  padding:.35rem .75rem;border-radius:var(--radius);font-size:.8rem;font-family:inherit;cursor:pointer;
-}
-.date-bar select:focus{outline:none;border-color:var(--blue2);}
-
-/* STATUS BAR */
-.status-bar{
-  padding:.6rem 2rem;background:var(--bg);border-bottom:1px solid var(--border);
-  display:flex;gap:1.5rem;align-items:center;flex-wrap:wrap;max-width:none;
-}
-.status-item{display:flex;align-items:center;gap:.4rem;font-size:.75rem;color:var(--muted2);}
-.status-item strong{color:var(--text);}
-.pulse{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--green2);}
-.pulse.warn{background:var(--yellow2);}
-.pulse.err{background:var(--red2);}
-
-/* KPI STRIP */
-.kpi-strip{
-  display:grid;grid-template-columns:repeat(4,1fr);gap:.75rem;
-  padding:1.25rem 2rem;max-width:1200px;margin:0 auto;
-}
-.kpi{
-  background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);
-  padding:1.1rem 1.25rem;position:relative;overflow:hidden;
-  transition:border-color .2s;
-}
-.kpi:hover{border-color:var(--border2);}
-.kpi::before{
-  content:'';position:absolute;top:0;left:0;right:0;height:2px;
-  background:var(--kpi-accent,var(--blue2));opacity:.6;
-}
-.kpi-label{color:var(--muted);font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.5rem;font-weight:500;}
-.kpi-value{font-size:1.5rem;font-weight:700;line-height:1;color:var(--kpi-color,var(--text));}
-.kpi-sub{color:var(--muted);font-size:.72rem;margin-top:.4rem;}
-.kpi.ok{--kpi-accent:var(--green2);--kpi-color:var(--green2);}
-.kpi.warn{--kpi-accent:var(--yellow2);--kpi-color:var(--yellow2);}
-.kpi.err{--kpi-accent:var(--red2);--kpi-color:var(--red2);}
-.kpi.blue{--kpi-accent:var(--blue2);--kpi-color:var(--blue2);}
-.kpi.purple{--kpi-accent:var(--purple2);--kpi-color:var(--purple2);}
-
-/* MODULES GRID */
-.modules-section{padding:1.5rem 2rem;max-width:1200px;margin:0 auto;}
-.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;}
-.section-title{font-size:.72rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;}
-.modules{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;}
-.module-card{
-  background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);
-  padding:1.5rem;transition:all .2s;cursor:pointer;text-decoration:none;color:var(--text);
-  display:block;position:relative;overflow:hidden;
-}
-.module-card::after{
-  content:'';position:absolute;inset:0;
-  background:linear-gradient(135deg,var(--mc-color,var(--blue))08,transparent 60%);
-  opacity:0;transition:opacity .2s;
-}
-.module-card:hover{border-color:var(--mc-color,var(--blue2));transform:translateY(-2px);}
-.module-card:hover::after{opacity:1;}
-.module-card.porfin{--mc-color:var(--green2);}
-.module-card.mitra{--mc-color:var(--blue2);}
-.module-card.insumos{--mc-color:var(--orange2);}
-.mc-icon{
-  width:40px;height:40px;border-radius:10px;display:flex;align-items:center;
-  justify-content:center;font-size:1.2rem;margin-bottom:1rem;
-  background:var(--surface2);border:1px solid var(--border2);
-}
-.module-card h2{font-size:.95rem;font-weight:700;margin-bottom:.4rem;}
-.module-card p{color:var(--muted2);font-size:.78rem;line-height:1.55;}
-.mc-tags{display:flex;flex-wrap:wrap;gap:.35rem;margin-top:1rem;}
-.mc-tag{
-  padding:.15rem .5rem;border-radius:20px;font-size:.68rem;font-weight:600;
-  background:var(--surface2);border:1px solid var(--border2);color:var(--muted2);
-}
-.mc-footer{
-  margin-top:1.25rem;padding-top:.75rem;border-top:1px solid var(--border);
-  display:flex;align-items:center;justify-content:space-between;
-  font-size:.75rem;color:var(--muted);
-}
-.mc-arrow{color:var(--muted);transition:transform .2s,color .2s;}
-.module-card:hover .mc-arrow{transform:translateX(4px);color:var(--text);}
-
-/* ACTIVITY */
-.activity-section{padding:0 2rem 2rem;max-width:1200px;margin:0 auto;}
-.activity-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;}
-.activity-card{background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:1.25rem;}
-.activity-card-title{font-size:.75rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:1rem;}
-.file-row{
-  display:flex;align-items:center;gap:.75rem;padding:.6rem 0;
-  border-bottom:1px solid var(--border);font-size:.78rem;
-}
-.file-row:last-child{border-bottom:none;}
-.file-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
-.file-dot.ok{background:var(--green2);box-shadow:0 0 4px var(--green2);}
-.file-dot.err{background:var(--red2);}
-.file-name{font-weight:500;flex:1;}
-.file-info{color:var(--muted);font-size:.72rem;}
-
-/* MODAL */
-.overlay{display:none;position:fixed;inset:0;background:#000c;z-index:500;align-items:center;justify-content:center;}
-.overlay.open{display:flex;}
-.modal{
-  background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);
-  padding:1.75rem;width:100%;max-width:580px;
-  box-shadow:0 24px 80px #0008;
-  max-height:90vh;overflow-y:auto;
-}
-.modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;}
-.modal-title{font-size:1rem;font-weight:700;display:flex;align-items:center;gap:.5rem;}
-.modal-close{background:none;border:none;color:var(--muted2);cursor:pointer;font-size:1.2rem;padding:.2rem;line-height:1;border-radius:4px;}
-.modal-close:hover{color:var(--text);}
-.config-section-title{
-  font-size:.68rem;font-weight:600;color:var(--blue2);text-transform:uppercase;
-  letter-spacing:.08em;margin:.75rem 0 .6rem;
-  padding:.3rem 0;border-bottom:1px solid var(--border);
-}
-.form-row{margin-bottom:.9rem;}
-.form-row label{display:block;font-size:.72rem;color:var(--muted2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.3rem;font-weight:500;}
-.form-row input{
-  width:100%;background:var(--surface2);border:1px solid var(--border2);
-  color:var(--text);padding:.45rem .75rem;border-radius:var(--radius);
-  font-size:.8rem;font-family:inherit;transition:border-color .15s;
-}
-.form-row input:focus{outline:none;border-color:var(--blue2);}
-.form-row-2{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;}
-.ref-row{display:flex;gap:.5rem;align-items:center;}
-.ref-row input{flex:1;}
-.ref-status{font-size:.9rem;flex-shrink:0;width:20px;text-align:center;}
-.hint{font-size:.7rem;color:var(--muted);margin-top:.25rem;}
-.hint.ok{color:var(--green2);}
-.hint.err{color:var(--red2);}
-.modal-actions{display:flex;gap:.5rem;justify-content:flex-end;margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--border);}
-
-/* SPINNER */
-.spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--border2);border-top-color:var(--blue2);border-radius:50%;animation:spin .6s linear infinite;}
-@keyframes spin{to{transform:rotate(360deg);}}
-
-/* FOOTER */
-footer{text-align:center;color:var(--muted);font-size:.72rem;padding:1.5rem;border-top:1px solid var(--border);}
-
-@media(max-width:900px){
-  .modules{grid-template-columns:1fr;}
-  .kpi-strip{grid-template-columns:repeat(2,1fr);}
-  .activity-grid{grid-template-columns:1fr;}
-}
+/* Config specific overrides */
+.cfg-actions { display: flex; gap: 8px; align-items: center; margin-top: 14px; }
+.save-status { font-size: .72rem; }
+.save-status.ok  { color: var(--sk-green); }
+.save-status.err { color: var(--sk-red); }
 </style>
 </head>
 <body>
 
-<nav>
-  <a class="nav-brand" href="/">
-    <div class="dot"></div>MVALORACION
-  </a>
-  <div class="nav-sep"></div>
-  <div class="nav-links">
-    <a href="/" class="active"><span class="icon">⊞</span>Dashboard</a>
-    <a href="/insumos.html"><span class="icon">◈</span>Insumos</a>
-    <a href="/porfin.html"><span class="icon">◉</span>Porfin</a>
-    <a href="/mitra.html"><span class="icon">◎</span>Mitra</a>
-    <a href="/api/docs" target="_blank"><span class="icon">⧉</span>API</a>
+<!-- NAVBAR -->
+<nav class="nav">
+  <div class="nav-logo">
+    <div class="nav-logo-dot"></div>
+    MVALORACION
   </div>
-  <div class="nav-end">
-    <button class="btn-icon" onclick="abrirConfig()" title="Configuración">⚙</button>
+  <div class="nav-links">
+    <a href="/" class="nav-link active">🏠 Dashboard</a>
+    <a href="/insumos.html" class="nav-link">📊 Insumos</a>
+    <a href="/porfin.html" class="nav-link">📋 Porfin</a>
+    <a href="/mitra.html" class="nav-link">⚡ Mitra</a>
+  </div>
+  <div class="nav-right">
+    <div class="nav-status" id="navStatus">
+      <div class="nav-status-dot" id="navDot"></div>
+      <span id="navStatusTxt">Conectando…</span>
+    </div>
+    <button class="nav-icon-btn" onclick="toggleTheme()" title="Cambiar tema" id="themeBtn">🌙</button>
   </div>
 </nav>
 
-<!-- Modal Config -->
-<div class="overlay" id="modal-config">
-  <div class="modal">
-    <div class="modal-header">
-      <div class="modal-title">⚙ Configuración de Rutas y Umbrales</div>
-      <button class="modal-close" onclick="cerrarConfig()">✕</button>
-    </div>
-
-    <div class="config-section-title">Directorio de Datos</div>
-    <div class="form-row">
-      <label>Carpeta principal (data_dir)</label>
-      <input type="text" id="cfg-data-dir" placeholder="C:/VALORACION/data"/>
-      <div class="hint" id="cfg-dir-hint">Debe contener subcarpetas YYYYMMDD/</div>
-    </div>
-
-    <div class="config-section-title">Umbrales de Alerta</div>
-    <div class="form-row-2">
-      <div class="form-row">
-        <label>Variación precio (%)</label>
-        <input type="number" id="cfg-umbral-pct" step="0.5" min="0.5" max="50"/>
-        <div class="hint">Variaciones anormales en insumos</div>
-      </div>
-      <div class="form-row">
-        <label>Diferencia causación (COP)</label>
-        <input type="number" id="cfg-umbral-caus" step="0.5" min="0"/>
-        <div class="hint">Alerta si |Mer - TIR| supera este valor</div>
-      </div>
-    </div>
-
-    <div class="config-section-title">Archivos de Referencia</div>
-    <div class="form-row">
-      <label>Especies (Especies.csv)</label>
-      <div class="ref-row">
-        <input type="text" id="cfg-ref-especies" placeholder="Ruta a Especies.csv"/>
-        <span class="ref-status" id="hint-especies"></span>
-      </div>
-    </div>
-    <div class="form-row">
-      <label>FCPE (Factores Cupones)</label>
-      <div class="ref-row">
-        <input type="text" id="cfg-ref-fcpe" placeholder="Ruta a FCPE.xlsx"/>
-        <span class="ref-status" id="hint-fcpe"></span>
-      </div>
-    </div>
-    <div class="form-row">
-      <label>Fiduciaria</label>
-      <div class="ref-row">
-        <input type="text" id="cfg-ref-fiduciaria" placeholder="Ruta a FIDUCIARIA0210.xlsx"/>
-        <span class="ref-status" id="hint-fiduciaria"></span>
-      </div>
-    </div>
-    <div class="form-row">
-      <label>Fondos (FONDOS.xlsx)</label>
-      <div class="ref-row">
-        <input type="text" id="cfg-ref-fondos" placeholder="Ruta a FONDOS.xlsx"/>
-        <span class="ref-status" id="hint-fondos"></span>
-      </div>
-    </div>
-    <div class="form-row">
-      <label>FCP (Fondos Comunes de Pensiones)</label>
-      <div class="ref-row">
-        <input type="text" id="cfg-ref-fcp" placeholder="Ruta a FCP.xlsx"/>
-        <span class="ref-status" id="hint-fcp"></span>
-      </div>
-    </div>
-
-    <div class="modal-actions">
-      <button class="btn btn-ghost" onclick="cerrarConfig()">Cancelar</button>
-      <button class="btn btn-ghost" onclick="verificarRutas()">🔍 Verificar rutas</button>
-      <button class="btn" onclick="guardarConfig()">💾 Guardar</button>
-    </div>
-  </div>
+<!-- ALERT STRIP -->
+<div class="alert-strip as-warn" id="alertStrip" style="display:none">
+  ⚠️ <span id="alertStripMsg"></span>
 </div>
 
-<div class="hero">
-  <div class="hero-inner">
-    <div>
-      <div class="hero-badge"><div class="dot"></div>Sistema Activo</div>
-      <h1>Control Operativo de<br><span>Valoración Financiera</span></h1>
-      <p>Revisión exhaustiva de insumos, precios, causaciones y validaciones diarias para Porfin y Mitra. Detección de anomalías y trazabilidad de observaciones.</p>
+<!-- TAB BAR -->
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="irTab('dash')">📊 Resumen</button>
+  <button class="tab-btn" onclick="irTab('cfg')">⚙️ Configuración</button>
+  <button class="tab-btn" onclick="irTab('health')">💚 Estado del Sistema</button>
+  <button class="tab-btn" onclick="irTab('logs')">📋 Logs</button>
+</div>
+
+<div class="main-content">
+<div class="page-body">
+
+  <!-- ── PANEL: RESUMEN ─────────────────────────────────────────────── -->
+  <div class="panel active" id="tab-dash">
+
+    <div class="module-grid" id="moduleGrid">
+      <a href="/insumos.html" class="module-card" style="--mc-color:#00A65A">
+        <div class="mc-icon">📊</div>
+        <div class="mc-title">Insumos</div>
+        <div class="mc-desc">Precios de mercado de proveedores: SP, SW, SV, MX, Notas.<br/>Alertas de variación, curvas de renta fija.</div>
+        <div class="mc-status">
+          <div class="mc-status-dot" id="statusInsumos" style="background:var(--muted)"></div>
+          <span id="statusInsumosTxt">Cargando…</span>
+        </div>
+      </a>
+      <a href="/porfin.html" class="module-card" style="--mc-color:#0A84FF">
+        <div class="mc-icon">📋</div>
+        <div class="mc-title">Porfin 596 / 575</div>
+        <div class="mc-desc">Verificación de valoración y causación.<br/>Portafolio fondo de inversión colectiva.</div>
+        <div class="mc-status">
+          <div class="mc-status-dot" id="statusPorfin" style="background:var(--muted)"></div>
+          <span id="statusPorfinTxt">Cargando…</span>
+        </div>
+      </a>
+      <a href="/mitra.html" class="module-card" style="--mc-color:#BF5AF2">
+        <div class="mc-icon">⚡</div>
+        <div class="mc-title">Mitra</div>
+        <div class="mc-desc">Conciliación y control de operaciones.<br/>Seguimiento de errores y diferencias.</div>
+        <div class="mc-status">
+          <div class="mc-status-dot" id="statusMitra" style="background:var(--muted)"></div>
+          <span id="statusMitraTxt">Cargando…</span>
+        </div>
+      </a>
     </div>
-    <div style="display:flex;gap:1rem;">
-      <div style="text-align:center;padding:1.25rem 1.5rem;background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);">
-        <div style="font-size:1.75rem;font-weight:800;color:var(--blue2);" id="hero-fecha">—</div>
-        <div style="font-size:.72rem;color:var(--muted);margin-top:.25rem;text-transform:uppercase;letter-spacing:.06em;">Fecha activa</div>
+
+    <!-- Mini health summary -->
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-title">🏥 Estado de Rutas</div>
+      <div class="health-grid" id="miniHealth">
+        <div class="loading"><span class="spin"></span> Verificando...</div>
       </div>
     </div>
-  </div>
-</div>
 
-<div class="date-bar">
-  <label>Fecha de revisión</label>
-  <select id="sel-fecha" onchange="cargarResumen()"><option value="">Cargando...</option></select>
-  <button class="btn" style="margin-left:.5rem;" onclick="cargarResumen()">↺ Actualizar</button>
-  <span id="status-global" style="margin-left:auto;font-size:.75rem;color:var(--muted);"></span>
-</div>
-
-<div class="kpi-strip">
-  <div class="kpi blue">
-    <div class="kpi-label">Archivos disponibles</div>
-    <div class="kpi-value" id="kpi-archivos">—</div>
-    <div class="kpi-sub">en la fecha seleccionada</div>
-  </div>
-  <div class="kpi" id="kpi-card-porfin">
-    <div class="kpi-label">Alertas Porfin 596</div>
-    <div class="kpi-value" id="kpi-alertas-porfin">—</div>
-    <div class="kpi-sub">errores detectados</div>
-  </div>
-  <div class="kpi" id="kpi-card-mitra">
-    <div class="kpi-label">Alertas Mitra</div>
-    <div class="kpi-value" id="kpi-alertas-mitra">—</div>
-    <div class="kpi-sub">precios + causaciones</div>
-  </div>
-  <div class="kpi" id="kpi-card-prov">
-    <div class="kpi-label">Proveedores activos</div>
-    <div class="kpi-value" id="kpi-proveedores">—</div>
-    <div class="kpi-sub">MX · NOTAS · SB · IND</div>
-  </div>
-</div>
-
-<div class="modules-section">
-  <div class="section-header">
-    <div class="section-title">Módulos de revisión</div>
-  </div>
-  <div class="modules">
-    <a class="module-card insumos" href="/insumos.html">
-      <div class="mc-icon">◈</div>
-      <h2>Insumos y Proveedores</h2>
-      <p>Revisión exhaustiva de precios MX, NOTAS, SB. Variaciones diarias, anomalías, histórico por ISIN y comparación entre fuentes.</p>
-      <div class="mc-tags">
-        <span class="mc-tag">Variaciones</span>
-        <span class="mc-tag">Comparador</span>
-        <span class="mc-tag">Histórico</span>
-        <span class="mc-tag">Anomalías</span>
+    <div class="g2">
+      <div class="card">
+        <div class="card-title">📅 Fechas Disponibles — Insumos</div>
+        <div id="fechasInsumos" class="loading"><span class="spin"></span></div>
       </div>
-      <div class="mc-footer">
-        <span>MX · NOTAS · SB · Monedas</span>
-        <span class="mc-arrow">→</span>
+      <div class="card">
+        <div class="card-title">ℹ️ Sistema</div>
+        <div id="sysInfo" style="font-size:.74rem;color:var(--muted2);line-height:1.8">
+          Cargando información del sistema…
+        </div>
       </div>
-    </a>
-    <a class="module-card porfin" href="/porfin.html">
-      <div class="mc-icon">◉</div>
-      <h2>Revisión Porfin 596/575</h2>
-      <p>Valida precios, valoración correcta, errores TIR/DV y causaciones por fondo. Observaciones por fila y exportación Excel oficial.</p>
-      <div class="mc-tags">
-        <span class="mc-tag">Posiciones 596</span>
-        <span class="mc-tag">Causaciones 575</span>
-        <span class="mc-tag">Fondos</span>
-        <span class="mc-tag">TIR/DV</span>
-      </div>
-      <div class="mc-footer">
-        <span>SKCLI596 · SKCLI575</span>
-        <span class="mc-arrow">→</span>
-      </div>
-    </a>
-    <a class="module-card mitra" href="/mitra.html">
-      <div class="mc-icon">◎</div>
-      <h2>Revisión Mitra</h2>
-      <p>Revisión VALORACION_DI/DF, causaciones, fuentes de precio, diferencias vs Porfin y observaciones automáticas por título.</p>
-      <div class="mc-tags">
-        <span class="mc-tag">DI / DF</span>
-        <span class="mc-tag">Causaciones</span>
-        <span class="mc-tag">vs Porfin</span>
-      </div>
-      <div class="mc-footer">
-        <span>VALORACION_DI · DF</span>
-        <span class="mc-arrow">→</span>
-      </div>
-    </a>
-  </div>
-</div>
-
-<div class="activity-section">
-  <div class="section-header">
-    <div class="section-title">Estado de archivos — fecha seleccionada</div>
-  </div>
-  <div class="activity-grid">
-    <div class="activity-card">
-      <div class="activity-card-title">Proveedores de precio</div>
-      <div id="list-proveedores"><div style="color:var(--muted);font-size:.8rem;"><span class="spinner"></span> Cargando...</div></div>
-    </div>
-    <div class="activity-card">
-      <div class="activity-card-title">Archivos Porfin / Mitra</div>
-      <div id="list-modulos"><div style="color:var(--muted);font-size:.8rem;"><span class="spinner"></span> Cargando...</div></div>
     </div>
   </div>
-</div>
 
-<footer>MVALORACION © 2026 — Skandia Colombia · Valoración Financiera</footer>
+  <!-- ── PANEL: CONFIGURACIÓN ───────────────────────────────────────── -->
+  <div class="panel" id="tab-cfg">
+
+    <div class="banner bn-info" style="margin-bottom:16px">
+      ℹ️ Los cambios se aplican inmediatamente. La configuración se guarda en <code>config.yaml</code> (nunca subido al repositorio).
+    </div>
+
+    <!-- Rutas de datos -->
+    <div class="cfg-section">
+      <div class="cfg-section-title">📁 Rutas de Datos</div>
+      <div class="cfg-row">
+        <div class="cfg-field" style="flex:2">
+          <label>Carpeta de datos local (data_dir)</label>
+          <input type="text" id="cfg-data-dir" placeholder="C:\ruta\a\data"/>
+          <div class="hint">Carpeta donde se guardan los archivos procesados (.pkl, .xlsx)</div>
+          <div class="cfg-status na" id="st-data-dir">— sin verificar</div>
+        </div>
+      </div>
+      <div class="cfg-row">
+        <div class="cfg-field" style="flex:2">
+          <label>Carpeta base de Infovalmer (infovalmer_dir)</label>
+          <input type="text" id="cfg-infovalmer-dir" placeholder="J:\VALORACION\VALORACION_ESPECIAL\Bolsa\INFOVALMER"/>
+          <div class="hint">Carpeta base. Dentro hay subcarpetas YYYYMMDD con los archivos de cada proveedor.</div>
+          <div class="cfg-status na" id="st-infovalmer-dir">— sin verificar</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Archivos de referencia -->
+    <div class="cfg-section">
+      <div class="cfg-section-title">📑 Archivos de Referencia</div>
+      <div class="cfg-row">
+        <div class="cfg-field">
+          <label>Referencia Especies (ref_especies)</label>
+          <input type="text" id="cfg-ref-especies" placeholder="ruta al archivo .xlsx"/>
+          <div class="cfg-status na" id="st-ref-especies">— sin verificar</div>
+        </div>
+        <div class="cfg-field">
+          <label>Referencia FCPE (ref_fcpe)</label>
+          <input type="text" id="cfg-ref-fcpe" placeholder="ruta al archivo .xlsx"/>
+          <div class="cfg-status na" id="st-ref-fcpe">— sin verificar</div>
+        </div>
+      </div>
+      <div class="cfg-row">
+        <div class="cfg-field">
+          <label>Referencia Fiduciaria (ref_fiduciaria)</label>
+          <input type="text" id="cfg-ref-fiduciaria" placeholder="ruta al archivo .xlsx"/>
+          <div class="cfg-status na" id="st-ref-fiduciaria">— sin verificar</div>
+        </div>
+        <div class="cfg-field">
+          <label>Referencia Fondos (ref_fondos)</label>
+          <input type="text" id="cfg-ref-fondos" placeholder="ruta al archivo .xlsx"/>
+          <div class="cfg-status na" id="st-ref-fondos">— sin verificar</div>
+        </div>
+      </div>
+      <div class="cfg-row">
+        <div class="cfg-field" style="max-width:400px">
+          <label>Referencia FCP (ref_fcp)</label>
+          <input type="text" id="cfg-ref-fcp" placeholder="ruta al archivo .xlsx"/>
+          <div class="cfg-status na" id="st-ref-fcp">— sin verificar</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Umbrales de alerta -->
+    <div class="cfg-section">
+      <div class="cfg-section-title">🚨 Umbrales de Alerta</div>
+      <div class="cfg-row">
+        <div class="cfg-field">
+          <label>Variación precio % (umbral_variacion_pct)</label>
+          <input type="number" id="cfg-umbral-var" step="0.01" placeholder="0.5"/>
+          <div class="hint">Alerta si variación día > este % (p.ej. 0.5 = 0.5%)</div>
+        </div>
+        <div class="cfg-field">
+          <label>Dif. causación (umbral_dif_causacion)</label>
+          <input type="number" id="cfg-umbral-caus" step="1" placeholder="1000"/>
+          <div class="hint">Diferencia en COP para marcar alerta en causación</div>
+        </div>
+      </div>
+      <div class="cfg-row">
+        <div class="cfg-field">
+          <label>Dif. valoración abs (umbral_dif_valoracion)</label>
+          <input type="number" id="cfg-umbral-val" step="1" placeholder="100000"/>
+          <div class="hint">Diferencia absoluta en COP para alerta de valoración</div>
+        </div>
+        <div class="cfg-field">
+          <label>Dif. valoración % (umbral_dif_valoracion_pct)</label>
+          <input type="number" id="cfg-umbral-val-pct" step="0.001" placeholder="0.01"/>
+          <div class="hint">Diferencia porcentual para alerta de valoración</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Servidor -->
+    <div class="cfg-section">
+      <div class="cfg-section-title">🌐 Servidor y Red</div>
+      <div class="cfg-row">
+        <div class="cfg-field">
+          <label>Host (host)</label>
+          <input type="text" id="cfg-host" placeholder="0.0.0.0"/>
+        </div>
+        <div class="cfg-field">
+          <label>Puerto (port)</label>
+          <input type="number" id="cfg-port" placeholder="8000"/>
+        </div>
+        <div class="cfg-field">
+          <label>Proxy (proxy)</label>
+          <input type="text" id="cfg-proxy" placeholder="http://proxy:3128 (opcional)"/>
+        </div>
+      </div>
+    </div>
+
+    <div class="cfg-actions">
+      <button class="btn btn-primary" onclick="guardarConfig()">💾 Guardar Configuración</button>
+      <button class="btn btn-ghost" onclick="cargarConfig()">↩️ Recargar</button>
+      <span class="save-status" id="saveStatus"></span>
+    </div>
+  </div>
+
+  <!-- ── PANEL: ESTADO DEL SISTEMA ──────────────────────────────────── -->
+  <div class="panel" id="tab-health">
+
+    <div class="g2" style="margin-bottom:12px">
+      <div class="card">
+        <div class="card-title">🏥 Rutas Configuradas</div>
+        <div class="health-grid" id="healthGrid">
+          <div class="loading"><span class="spin"></span> Verificando…</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">📡 API Endpoints</div>
+        <div class="health-grid" id="healthApi">
+          <div class="loading"><span class="spin"></span> Verificando…</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📅 Fechas Disponibles por Módulo</div>
+      <div id="healthFechas" class="loading"><span class="spin"></span> Cargando fechas…</div>
+    </div>
+  </div>
+
+  <!-- ── PANEL: LOGS ────────────────────────────────────────────────── -->
+  <div class="panel" id="tab-logs">
+
+    <div class="log-controls">
+      <div class="log-level-filter">
+        <button class="lf lf-info on" data-level="INFO" onclick="toggleLogFilter(this)">INFO</button>
+        <button class="lf lf-warn on" data-level="WARN" onclick="toggleLogFilter(this)">WARN</button>
+        <button class="lf lf-error on" data-level="ERROR" onclick="toggleLogFilter(this)">ERROR</button>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="cargarLogs()">🔄 Actualizar</button>
+      <button class="btn btn-ghost btn-sm" onclick="limpiarLogs()">🗑️ Limpiar vista</button>
+      <span style="font-size:.65rem;color:var(--muted)" id="logCount"></span>
+    </div>
+
+    <div class="log-wrap" id="logWrap">
+      <div class="log-empty">Cargando logs…</div>
+    </div>
+  </div>
+
+</div><!-- page-body -->
+</div><!-- main-content -->
 
 <script>
-const API='';
-async function fetchJSON(u){const r=await fetch(API+u);if(!r.ok)throw new Error(r.statusText);return r.json();}
+/* ── THEME ───────────────────────────────────────────────────────────── */
+(function(){
+  const t = localStorage.getItem('sk-theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', t);
+  document.getElementById('themeBtn').textContent = t === 'dark' ? '🌙' : '☀️';
+})();
 
-async function cargarFechas(){
-  const sel=document.getElementById('sel-fecha');
-  try{
-    const d=await fetchJSON('/api/insumos/fechas');
-    const f=(d.fechas||[]).slice().reverse();
-    sel.innerHTML=f.map(x=>`<option value="${x}">${fmtFecha(x)}</option>`).join('');
-    if(f.length){document.getElementById('hero-fecha').textContent=fmtFecha(f[0]);cargarResumen();}
-  }catch(e){sel.innerHTML='<option value="">Error cargando fechas</option>';}
+function toggleTheme() {
+  const curr = document.documentElement.getAttribute('data-theme');
+  const next = curr === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  localStorage.setItem('sk-theme', next);
+  document.getElementById('themeBtn').textContent = next === 'dark' ? '🌙' : '☀️';
 }
 
-function fmtFecha(f){return f?`${f.slice(0,4)}-${f.slice(4,6)}-${f.slice(6)}`:'—';}
-
-async function cargarResumen(){
-  const fecha=document.getElementById('sel-fecha').value;
-  if(!fecha)return;
-  document.getElementById('hero-fecha').textContent=fmtFecha(fecha);
-  document.getElementById('status-global').textContent='Actualizando...';
-  await Promise.all([cargarArchivos(fecha),cargarKpiPorfin(fecha),cargarKpiMitra(fecha)]);
-  document.getElementById('status-global').textContent=`Última actualización: ${new Date().toLocaleTimeString('es-CO')}`;
-}
-
-async function cargarArchivos(fecha){
-  try{
-    const d=await fetchJSON(`/api/insumos/archivos_disponibles/${fecha}`);
-    const entries=Object.entries(d);
-    const proveedores=['MX','MX_RV','NOTAS','SB','IND'];
-    const modulos=['MONEDAS'];
-
-    const activos=entries.filter(([,v])=>v.disponible).length;
-    const total=entries.length;
-    const el=document.getElementById('kpi-archivos');
-    el.textContent=`${activos}/${total}`;
-    const kCard=document.getElementById('kpi-archivos').closest('.kpi');
-    kCard.className='kpi '+(activos>=5?'ok':activos>=3?'warn':'err');
-    document.getElementById('kpi-proveedores').textContent=activos;
-    document.getElementById('kpi-card-prov').className='kpi '+(activos>=4?'ok':activos>=2?'warn':'err');
-
-    // Proveedores list
-    const provList=entries.filter(([k])=>proveedores.includes(k)||!['MONEDAS'].includes(k));
-    document.getElementById('list-proveedores').innerHTML=provList.map(([k,v])=>`
-      <div class="file-row">
-        <div class="file-dot ${v.disponible?'ok':'err'}"></div>
-        <div class="file-name">${k}</div>
-        <div class="file-info">${v.disponible?`${(v.filas||0).toLocaleString()} registros`:'No disponible'}</div>
-      </div>`).join('');
-
-    document.getElementById('list-modulos').innerHTML=`
-      <div class="file-row"><div class="file-dot ${d.MONEDAS?.disponible?'ok':'err'}"></div>
-        <div class="file-name">Monedas</div>
-        <div class="file-info">${d.MONEDAS?.disponible?`${(d.MONEDAS.filas||0)} registros`:'No disponible'}</div>
-      </div>
-      <div class="file-row"><div class="file-dot ok"></div><div class="file-name">Porfin 596/575</div><div class="file-info">Ver módulo Porfin</div></div>
-      <div class="file-row"><div class="file-dot ok"></div><div class="file-name">Mitra DI/DF</div><div class="file-info">Ver módulo Mitra</div></div>
-    `;
-  }catch(e){
-    document.getElementById('list-proveedores').innerHTML=`<div style="color:var(--red2);font-size:.8rem;">Error: ${e.message}</div>`;
+/* ── TABS ─────────────────────────────────────────────────────────────── */
+const TAB_LOADED = {};
+function irTab(id) {
+  document.querySelectorAll('.tab-btn').forEach((b,i) => {
+    const tabs = ['dash','cfg','health','logs'];
+    b.classList.toggle('active', tabs[i] === id);
+  });
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  const panel = document.getElementById('tab-' + id);
+  if (panel) panel.classList.add('active');
+  if (!TAB_LOADED[id]) {
+    TAB_LOADED[id] = true;
+    if (id === 'cfg')    cargarConfig();
+    if (id === 'health') cargarHealth();
+    if (id === 'logs')   cargarLogs();
   }
 }
 
-async function cargarKpiPorfin(fecha){
-  try{
-    const d=await fetchJSON(`/api/porfin/errores/${fecha}`);
-    const n=d.total_errores??0;
-    document.getElementById('kpi-alertas-porfin').textContent=n.toLocaleString();
-    document.getElementById('kpi-card-porfin').className='kpi '+(n===0?'ok':n<20?'warn':'err');
-  }catch(e){document.getElementById('kpi-alertas-porfin').textContent='—';}
+/* ── API BASE ─────────────────────────────────────────────────────────── */
+const API = '';
+
+async function apiFetch(url, opts) {
+  const r = await fetch(API + url, opts);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
 }
 
-async function cargarKpiMitra(fecha){
-  try{
-    const d=await fetchJSON(`/api/mitra/resumen/${fecha}`);
-    const n=(d.alertas_causacion||0)+(d.alertas_precio||0)+(d.sin_precio||0);
-    document.getElementById('kpi-alertas-mitra').textContent=n.toLocaleString();
-    document.getElementById('kpi-card-mitra').className='kpi '+(n===0?'ok':n<10?'warn':'err');
-  }catch(e){document.getElementById('kpi-alertas-mitra').textContent='—';}
+/* ── CONFIG ──────────────────────────────────────────────────────────── */
+let _cfg = {};
+
+async function cargarConfig() {
+  try {
+    _cfg = await apiFetch('/api/config');
+    // Rutas
+    setVal('cfg-data-dir',         _cfg.data_dir         || '');
+    setVal('cfg-infovalmer-dir',   _cfg.infovalmer_dir   || '');
+    setVal('cfg-ref-especies',     _cfg.ref_especies     || '');
+    setVal('cfg-ref-fcpe',         _cfg.ref_fcpe         || '');
+    setVal('cfg-ref-fiduciaria',   _cfg.ref_fiduciaria   || '');
+    setVal('cfg-ref-fondos',       _cfg.ref_fondos       || '');
+    setVal('cfg-ref-fcp',          _cfg.ref_fcp          || '');
+    // Umbrales
+    setVal('cfg-umbral-var',       _cfg.umbral_variacion_pct       ?? '');
+    setVal('cfg-umbral-caus',      _cfg.umbral_dif_causacion       ?? '');
+    setVal('cfg-umbral-val',       _cfg.umbral_dif_valoracion      ?? '');
+    setVal('cfg-umbral-val-pct',   _cfg.umbral_dif_valoracion_pct  ?? '');
+    // Servidor
+    setVal('cfg-host',  _cfg.host  || '');
+    setVal('cfg-port',  _cfg.port  || '');
+    setVal('cfg-proxy', _cfg.proxy || '');
+
+    // Status indicators
+    setStatus('st-data-dir',       _cfg.data_dir_exists);
+    setStatus('st-infovalmer-dir', _cfg.infovalmer_dir_exists);
+    setStatus('st-ref-especies',   _cfg.ref_especies_exists);
+    setStatus('st-ref-fcpe',       _cfg.ref_fcpe_exists);
+    setStatus('st-ref-fiduciaria', _cfg.ref_fiduciaria_exists);
+    setStatus('st-ref-fondos',     _cfg.ref_fondos_exists);
+    setStatus('st-ref-fcp',        _cfg.ref_fcp_exists);
+    setSaveStatus('', '');
+  } catch(e) {
+    setSaveStatus('err', '❌ No se pudo cargar la configuración');
+  }
 }
 
-cargarFechas();
-
-// ── Config ──────────────────────────────────────────────────────────────
-async function abrirConfig(){
-  try{
-    const c=await fetchJSON('/api/config');
-    document.getElementById('cfg-data-dir').value=c.data_dir||'';
-    document.getElementById('cfg-umbral-pct').value=c.umbral_variacion_pct??5;
-    document.getElementById('cfg-umbral-caus').value=c.umbral_dif_causacion??1;
-    document.getElementById('cfg-ref-especies').value=c.ref_especies||'';
-    document.getElementById('cfg-ref-fcpe').value=c.ref_fcpe||'';
-    document.getElementById('cfg-ref-fiduciaria').value=c.ref_fiduciaria||'';
-    document.getElementById('cfg-ref-fondos').value=c.ref_fondos||'';
-    document.getElementById('cfg-ref-fcp').value=c.ref_fcp||'';
-    const h=document.getElementById('cfg-dir-hint');
-    h.textContent=c.data_dir_exists?'✓ Carpeta encontrada':'⚠ Carpeta no encontrada';
-    h.className='hint '+(c.data_dir_exists?'ok':'err');
-    ['especies','fcpe','fiduciaria','fondos','fcp'].forEach(k=>{
-      const el=document.getElementById('hint-'+k);
-      if(el){el.textContent=c['ref_'+k+'_exists']?'✓':'✗';el.style.color=c['ref_'+k+'_exists']?'var(--green2)':'var(--red2)';}
-    });
-  }catch(e){console.error(e);}
-  document.getElementById('modal-config').classList.add('open');
+function setVal(id, v) {
+  const el = document.getElementById(id);
+  if (el) el.value = v;
 }
-function cerrarConfig(){document.getElementById('modal-config').classList.remove('open');}
 
-function _cfgBody(){
-  const v=id=>document.getElementById(id).value.trim()||undefined;
-  return{
-    data_dir:v('cfg-data-dir'),
-    umbral_variacion_pct:parseFloat(document.getElementById('cfg-umbral-pct').value)||undefined,
-    umbral_dif_causacion:parseFloat(document.getElementById('cfg-umbral-caus').value)||undefined,
-    ref_especies:v('cfg-ref-especies'),ref_fcpe:v('cfg-ref-fcpe'),
-    ref_fiduciaria:v('cfg-ref-fiduciaria'),ref_fondos:v('cfg-ref-fondos'),ref_fcp:v('cfg-ref-fcp'),
+function setStatus(id, ok) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (ok === true)  { el.className = 'cfg-status ok';  el.textContent = '✅ Ruta accesible'; }
+  else if (ok === false) { el.className = 'cfg-status err'; el.textContent = '❌ No encontrada'; }
+  else              { el.className = 'cfg-status na';  el.textContent = '— sin configurar'; }
+}
+
+function setSaveStatus(cls, msg) {
+  const el = document.getElementById('saveStatus');
+  el.className = 'save-status ' + cls;
+  el.textContent = msg;
+}
+
+async function guardarConfig() {
+  const body = {
+    data_dir:                  gv('cfg-data-dir')        || null,
+    infovalmer_dir:            gv('cfg-infovalmer-dir')  || null,
+    ref_especies:              gv('cfg-ref-especies')    || null,
+    ref_fcpe:                  gv('cfg-ref-fcpe')        || null,
+    ref_fiduciaria:            gv('cfg-ref-fiduciaria')  || null,
+    ref_fondos:                gv('cfg-ref-fondos')      || null,
+    ref_fcp:                   gv('cfg-ref-fcp')         || null,
+    umbral_variacion_pct:      parseFloatOrNull('cfg-umbral-var'),
+    umbral_dif_causacion:      parseFloatOrNull('cfg-umbral-caus'),
+    umbral_dif_valoracion:     parseFloatOrNull('cfg-umbral-val'),
+    umbral_dif_valoracion_pct: parseFloatOrNull('cfg-umbral-val-pct'),
+    host:                      gv('cfg-host')  || null,
+    port:                      parseIntOrNull('cfg-port'),
+    proxy:                     gv('cfg-proxy') || null,
   };
+
+  // Remove nulls
+  Object.keys(body).forEach(k => body[k] === null && delete body[k]);
+
+  setSaveStatus('', '⏳ Guardando…');
+  try {
+    const r = await apiFetch('/api/config', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(body)
+    });
+    if (r.ok) {
+      setSaveStatus('ok', '✅ Configuración guardada');
+      setTimeout(() => cargarConfig(), 400);
+    } else {
+      setSaveStatus('err', '❌ ' + (r.msg || 'Error al guardar'));
+    }
+  } catch(e) {
+    setSaveStatus('err', '❌ ' + e.message);
+  }
 }
-async function verificarRutas(){
-  await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(_cfgBody())});
-  const c=await fetchJSON('/api/config');
-  const h=document.getElementById('cfg-dir-hint');
-  h.textContent=c.data_dir_exists?'✓ Carpeta encontrada':'⚠ Carpeta no encontrada';
-  h.className='hint '+(c.data_dir_exists?'ok':'err');
-  ['especies','fcpe','fiduciaria','fondos','fcp'].forEach(k=>{
-    const el=document.getElementById('hint-'+k);
-    if(el){el.textContent=c['ref_'+k+'_exists']?'✓':'✗';el.style.color=c['ref_'+k+'_exists']?'var(--green2)':'var(--red2)';}
+
+function gv(id) { const el = document.getElementById(id); return el ? el.value.trim() : ''; }
+function parseFloatOrNull(id) { const v = gv(id); return v === '' ? null : parseFloat(v); }
+function parseIntOrNull(id)   { const v = gv(id); return v === '' ? null : parseInt(v); }
+
+/* ── HEALTH ──────────────────────────────────────────────────────────── */
+async function cargarHealth() {
+  // Paths health
+  try {
+    const cfg = await apiFetch('/api/config');
+    const paths = [
+      { name: 'data_dir',       label: 'Datos local',      ok: cfg.data_dir_exists,       val: cfg.data_dir },
+      { name: 'infovalmer_dir', label: 'Infovalmer',       ok: cfg.infovalmer_dir_exists, val: cfg.infovalmer_dir },
+      { name: 'ref_especies',   label: 'Ref. Especies',    ok: cfg.ref_especies_exists,   val: cfg.ref_especies },
+      { name: 'ref_fcpe',       label: 'Ref. FCPE',        ok: cfg.ref_fcpe_exists,       val: cfg.ref_fcpe },
+      { name: 'ref_fiduciaria', label: 'Ref. Fiduciaria',  ok: cfg.ref_fiduciaria_exists, val: cfg.ref_fiduciaria },
+      { name: 'ref_fondos',     label: 'Ref. Fondos',      ok: cfg.ref_fondos_exists,     val: cfg.ref_fondos },
+      { name: 'ref_fcp',        label: 'Ref. FCP',         ok: cfg.ref_fcp_exists,        val: cfg.ref_fcp },
+    ];
+    const hg = document.getElementById('healthGrid');
+    hg.innerHTML = paths.map(p => `
+      <div class="health-item">
+        <div class="health-dot ${p.ok ? 'ok' : (p.val ? 'err' : 'na')}"></div>
+        <div>
+          <div class="health-name">${p.label}</div>
+          <div class="health-val">${p.ok ? '✓ OK' : (p.val ? '✗ No accesible' : 'Sin configurar')}</div>
+        </div>
+      </div>
+    `).join('');
+
+    // Mini health in dashboard
+    const mh = document.getElementById('miniHealth');
+    if (mh) mh.innerHTML = paths.map(p => `
+      <div class="health-item">
+        <div class="health-dot ${p.ok ? 'ok' : (p.val ? 'err' : 'na')}"></div>
+        <div><div class="health-name">${p.label}</div></div>
+      </div>
+    `).join('');
+  } catch(e) {
+    document.getElementById('healthGrid').innerHTML = `<div class="empty">Error cargando estado</div>`;
+  }
+
+  // API endpoints health
+  const endpoints = [
+    { label: 'GET /api/config',                url: '/api/config' },
+    { label: 'GET /api/insumos/fechas',        url: '/api/insumos/fechas' },
+    { label: 'GET /api/porfin/fechas',         url: '/api/porfin/fechas' },
+    { label: 'GET /api/mitra/fechas',          url: '/api/mitra/fechas' },
+  ];
+  const ha = document.getElementById('healthApi');
+  ha.innerHTML = '<div class="loading"><span class="spin"></span> Verificando endpoints…</div>';
+
+  const results = await Promise.allSettled(endpoints.map(e =>
+    fetch(API + e.url).then(r => ({ ok: r.ok, status: r.status }))
+  ));
+
+  ha.innerHTML = endpoints.map((e, i) => {
+    const r = results[i];
+    const ok = r.status === 'fulfilled' && r.value.ok;
+    const status = r.status === 'fulfilled' ? r.value.status : 'ERR';
+    return `
+      <div class="health-item">
+        <div class="health-dot ${ok ? 'ok' : 'err'}"></div>
+        <div>
+          <div class="health-name">${e.label}</div>
+          <div class="health-val">${ok ? '✓ ' + status : '✗ ' + status}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  // Fechas disponibles
+  await cargarFechasHealth();
+}
+
+async function cargarFechasHealth() {
+  const el = document.getElementById('healthFechas');
+  const modulos = [
+    { label: 'Insumos', url: '/api/insumos/fechas', id: 'insumos' },
+    { label: 'Porfin',  url: '/api/porfin/fechas',  id: 'porfin' },
+    { label: 'Mitra',   url: '/api/mitra/fechas',   id: 'mitra' },
+  ];
+
+  el.innerHTML = '<div class="g3">' + modulos.map(m => `
+    <div class="card">
+      <div class="card-title">${m.label}</div>
+      <div id="hf-${m.id}" class="loading"><span class="spin"></span></div>
+    </div>
+  `).join('') + '</div>';
+
+  modulos.forEach(async m => {
+    const d = document.getElementById('hf-' + m.id);
+    try {
+      const data = await apiFetch(m.url);
+      const fechas = Array.isArray(data) ? data : (data.fechas || []);
+      if (!fechas.length) { d.innerHTML = '<div class="empty">Sin fechas</div>'; return; }
+      d.innerHTML = fechas.slice(0, 12).map(f => `
+        <div style="display:flex;align-items:center;gap:6px;padding:.2rem 0;font-size:.74rem;border-bottom:1px solid var(--bdr)">
+          <span class="health-dot ok"></span> ${f}
+        </div>
+      `).join('') + (fechas.length > 12 ? `<div style="color:var(--muted);font-size:.65rem;margin-top:4px">… y ${fechas.length-12} más</div>` : '');
+    } catch(e) {
+      d.innerHTML = '<div class="empty" style="color:var(--sk-red)">No disponible</div>';
+    }
   });
 }
-async function guardarConfig(){
-  try{
-    const r=await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(_cfgBody())});
-    const d=await r.json();
-    if(d.ok){cerrarConfig();cargarFechas();}else alert('Error: '+(d.msg||'desconocido'));
-  }catch(e){alert('Error: '+e.message);}
+
+/* ── LOGS ─────────────────────────────────────────────────────────────── */
+let _allLogs = [];
+let _activeFilters = new Set(['INFO','WARN','ERROR']);
+
+function toggleLogFilter(btn) {
+  const lvl = btn.dataset.level;
+  if (_activeFilters.has(lvl)) _activeFilters.delete(lvl);
+  else _activeFilters.add(lvl);
+  btn.classList.toggle('on', _activeFilters.has(lvl));
+  renderLogs();
 }
-document.getElementById('modal-config').addEventListener('click',e=>{if(e.target===e.currentTarget)cerrarConfig();});
+
+async function cargarLogs() {
+  const wrap = document.getElementById('logWrap');
+  wrap.innerHTML = '<div class="log-empty">Cargando…</div>';
+  try {
+    const data = await apiFetch('/api/logs?limit=300');
+    _allLogs = Array.isArray(data) ? data : (data.logs || []);
+    renderLogs();
+  } catch(e) {
+    wrap.innerHTML = `<div class="log-empty" style="color:var(--sk-red)">Error cargando logs: ${e.message}</div>`;
+  }
+}
+
+function renderLogs() {
+  const filtered = _allLogs.filter(l => _activeFilters.has(l.level || 'INFO'));
+  const wrap = document.getElementById('logWrap');
+  document.getElementById('logCount').textContent = `${filtered.length} entradas`;
+
+  if (!filtered.length) {
+    wrap.innerHTML = '<div class="log-empty">Sin logs con los filtros seleccionados</div>';
+    return;
+  }
+
+  wrap.innerHTML = filtered.map(l => {
+    const lvl = (l.level || 'INFO').toUpperCase();
+    const ts  = l.ts || l.timestamp || '';
+    const msg = escHtml(l.msg || l.message || '');
+    return `<div class="log-entry">
+      <span class="log-ts">${ts.slice(-12)}</span>
+      <span class="log-lvl ${lvl}">${lvl}</span>
+      <span class="log-msg">${msg}</span>
+    </div>`;
+  }).join('');
+
+  wrap.scrollTop = wrap.scrollHeight;
+}
+
+function limpiarLogs() {
+  _allLogs = [];
+  document.getElementById('logWrap').innerHTML = '<div class="log-empty">Vista limpiada</div>';
+  document.getElementById('logCount').textContent = '';
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+/* ── DASHBOARD INIT ──────────────────────────────────────────────────── */
+async function initDashboard() {
+  // Nav status
+  try {
+    await apiFetch('/api/config');
+    document.getElementById('navDot').className = 'nav-status-dot ok';
+    document.getElementById('navStatusTxt').textContent = 'Conectado';
+  } catch {
+    document.getElementById('navDot').className = 'nav-status-dot err';
+    document.getElementById('navStatusTxt').textContent = 'Sin conexión';
+  }
+
+  // Módule statuses
+  const modules = [
+    { id: 'Insumos', dotId: 'statusInsumos', txtId: 'statusInsumosTxt', url: '/api/insumos/fechas' },
+    { id: 'Porfin',  dotId: 'statusPorfin',  txtId: 'statusPorfinTxt',  url: '/api/porfin/fechas' },
+    { id: 'Mitra',   dotId: 'statusMitra',   txtId: 'statusMitraTxt',   url: '/api/mitra/fechas' },
+  ];
+
+  modules.forEach(async m => {
+    try {
+      const data = await apiFetch(m.url);
+      const fechas = Array.isArray(data) ? data : (data.fechas || []);
+      const dot = document.getElementById(m.dotId);
+      const txt = document.getElementById(m.txtId);
+      if (dot) dot.style.background = 'var(--sk-green)';
+      if (txt) txt.textContent = fechas.length ? `${fechas.length} fecha${fechas.length > 1 ? 's' : ''} disponible${fechas.length > 1 ? 's' : ''}` : 'Sin datos';
+    } catch {
+      const dot = document.getElementById(m.dotId);
+      const txt = document.getElementById(m.txtId);
+      if (dot) dot.style.background = 'var(--sk-red)';
+      if (txt) txt.textContent = 'No disponible';
+    }
+  });
+
+  // Fechas insumos en dashboard
+  try {
+    const data = await apiFetch('/api/insumos/fechas');
+    const fechas = Array.isArray(data) ? data : (data.fechas || []);
+    const el = document.getElementById('fechasInsumos');
+    if (!fechas.length) { el.innerHTML = '<div class="empty">Sin fechas disponibles</div>'; return; }
+    el.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:6px">' +
+      fechas.map(f => `<span class="pill"><strong>${f}</strong></span>`).join('') +
+      '</div>';
+  } catch {
+    document.getElementById('fechasInsumos').innerHTML = '<div class="empty" style="color:var(--sk-red)">Error cargando fechas</div>';
+  }
+
+  // System info
+  try {
+    const cfg = await apiFetch('/api/config');
+    document.getElementById('sysInfo').innerHTML = `
+      <div><span style="color:var(--muted)">Versión:</span> MVALORACION 2.0</div>
+      <div><span style="color:var(--muted)">Puerto:</span> ${cfg.port || 8000}</div>
+      <div><span style="color:var(--muted)">Host:</span> ${cfg.host || '0.0.0.0'}</div>
+      <div><span style="color:var(--muted)">Data dir:</span> ${cfg.data_dir || 'No configurado'}</div>
+      <div><span style="color:var(--muted)">Infovalmer:</span> ${cfg.infovalmer_dir || 'No configurado'}</div>
+    `;
+
+    // Mini health
+    const paths = [
+      { label: 'data_dir',       ok: cfg.data_dir_exists },
+      { label: 'infovalmer_dir', ok: cfg.infovalmer_dir_exists },
+      { label: 'ref_especies',   ok: cfg.ref_especies_exists },
+      { label: 'ref_fcpe',       ok: cfg.ref_fcpe_exists },
+      { label: 'ref_fiduciaria', ok: cfg.ref_fiduciaria_exists },
+      { label: 'ref_fondos',     ok: cfg.ref_fondos_exists },
+      { label: 'ref_fcp',        ok: cfg.ref_fcp_exists },
+    ];
+    const mh = document.getElementById('miniHealth');
+    if (mh) mh.innerHTML = paths.map(p => `
+      <div class="health-item">
+        <div class="health-dot ${p.ok ? 'ok' : 'na'}"></div>
+        <div class="health-name">${p.label}</div>
+        <div class="health-val" style="margin-left:auto">${p.ok ? '✓' : '—'}</div>
+      </div>
+    `).join('');
+  } catch {}
+}
+
+/* ── BOOT ─────────────────────────────────────────────────────────────── */
+document.addEventListener('DOMContentLoaded', () => {
+  TAB_LOADED['dash'] = true;
+  initDashboard();
+});
 </script>
 </body>
 </html>

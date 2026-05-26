@@ -20,8 +20,9 @@ data/
 outputs/
 logs/
 
-# ── Código legado ─────────────────────────────────────────────────────────────
+# ── Código legado / ejemplos (movido a examples/) ────────────────────────────
 legacy/
+examples/
 
 # ── Notebooks / docs internos ─────────────────────────────────────────────────
 notebooks/

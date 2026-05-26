@@ -5,8 +5,9 @@ from __future__ import annotations
 import os
 import shutil
 import logging
+import collections
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import uvicorn
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
@@ -18,8 +19,24 @@ from pydantic import BaseModel
 from routers import insumos, porfin, mitra
 from config import get_config, update_config, get_data_dir
 
+# ── In-memory log buffer (últimas 500 entradas) ────────────────────────────
+_LOG_BUFFER: collections.deque = collections.deque(maxlen=500)
+
+class _BufferHandler(logging.Handler):
+    def emit(self, record: logging.LogRecord):
+        _LOG_BUFFER.append({
+            "ts":    self.formatTime(record, "%Y-%m-%d %H:%M:%S"),
+            "level": record.levelname,
+            "msg":   record.getMessage(),
+        })
+
+_buf_handler = _BufferHandler()
+_buf_handler.setLevel(logging.DEBUG)
+logging.getLogger().addHandler(_buf_handler)
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)-8s | %(message)s")
 logger = logging.getLogger("mvaloracion")
+logger.addHandler(_buf_handler)
 
 app = FastAPI(
     title="MVALORACION",
@@ -106,26 +123,61 @@ async def upload_archivo(
     return {"ok": True, "path": str(dest), "size": dest.stat().st_size}
 
 
-# ── Frontend ────────────────────────────────────────────────────────────────
-FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
+# ── Logs endpoint ───────────────────────────────────────────────────────────
+@app.get("/api/logs", tags=["System"])
+def get_logs(limit: int = 200):
+    entries = list(_LOG_BUFFER)[-limit:]
+    return entries
+
+
+# ── Frontend / Static ────────────────────────────────────────────────────────
+ROOT_DIR     = Path(__file__).parent.parent
+FRONTEND_DIR = ROOT_DIR / "frontend"
+MODULES_DIR  = ROOT_DIR / "modules"
+SHARED_DIR   = ROOT_DIR / "shared"
+
 FRONTEND_DIR.mkdir(exist_ok=True)
 
-app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
+# Montar carpetas estáticas
+# /static/          → frontend/ (HTML legacy + archivos sueltos)
+# /static/modules/  → modules/ (módulos nuevos)
+# /static/shared/   → shared/  (design.css, nav.js)
+app.mount("/static/modules", StaticFiles(directory=str(MODULES_DIR)), name="modules")
+app.mount("/static/shared",  StaticFiles(directory=str(SHARED_DIR)),  name="shared")
+app.mount("/static",         StaticFiles(directory=str(FRONTEND_DIR)), name="static")
 
 
 @app.get("/", include_in_schema=False)
 def root():
-    return FileResponse(str(FRONTEND_DIR / "index.html"))
+    # Dashboard principal (nuevo módulo)
+    new_idx = FRONTEND_DIR / "index.html"
+    return FileResponse(str(new_idx))
+
+
+@app.get("/insumos.html", include_in_schema=False)
+def serve_insumos():
+    """Sirve el módulo insumos (nueva arquitectura modular)."""
+    modular = MODULES_DIR / "insumos" / "index.html"
+    if modular.exists():
+        return FileResponse(str(modular))
+    return FileResponse(str(FRONTEND_DIR / "insumos.html"))
 
 
 @app.get("/{page}.html", include_in_schema=False)
 def serve_page(page: str):
-    f = FRONTEND_DIR / f"{page}.html"
-    if f.exists():
-        return FileResponse(str(f))
+    # Buscar primero en módulos, luego en frontend legacy
+    modular = MODULES_DIR / page / "index.html"
+    if modular.exists():
+        return FileResponse(str(modular))
+    legacy = FRONTEND_DIR / f"{page}.html"
+    if legacy.exists():
+        return FileResponse(str(legacy))
     return FileResponse(str(FRONTEND_DIR / "index.html"))
 
 
 if __name__ == "__main__":
-    logger.info("MVALORACION iniciando en http://localhost:8000")
-    uvicorn.run("api_main:app", host="0.0.0.0", port=8000, reload=True)
+    cfg = get_config()
+    host = cfg.get("host", "0.0.0.0")
+    port = int(cfg.get("port", 8000))
+    logger.info(f"MVALORACION iniciando en http://{host}:{port}")
+    uvicorn.run("api_main:app", host=host, port=port, reload=True)
