@@ -729,6 +729,11 @@ async function verificarConectividad() {
       cmsg.style.color = ok ? 'var(--sk-green)' : '#FF9500';
     }
 
+    // Si encontró fechas y el selector está vacío (o en estado de error), recargar
+    if (ok && nf > 0 && !S.fechas.length) {
+      cargarFechas();
+    }
+
     // Mostrar rutas disponibles en el panel conversor
     if (d.bases && d.bases.length) {
       const infoEl = $('conv-vpn-info');
