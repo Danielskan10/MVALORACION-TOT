@@ -60,6 +60,7 @@ function showTab(id, el) {
   if (id==='tab-mx')          cargarTabla('MX');
   if (id==='tab-notas')       cargarTabla('NOTAS');
   if (id==='tab-config')      cargarConfig();
+  if (id==='tab-conversor')   cargarStatusCache();
   if (id==='tab-logs')        cargarLogs();
 }
 
@@ -78,8 +79,11 @@ async function cargarTodo() {
   S.fecha = $('sel-fecha').value;
   S.umbral = parseFloat($('inp-umbral').value)||3;
   if (!S.fecha) return;
-  S.tabData = {}; S.alertas = []; S.spData = []; S.mdData = null;
+  S.tabData = {}; S.alertas = []; S.spData = []; S.mdData = null; _curvaData = null;
   actualizarBadgesFecha();
+  // Sincronizar campo conversor con la fecha activa
+  const convFecha = $('conv-fecha');
+  if (convFecha && !convFecha.value) convFecha.value = S.fecha;
   await Promise.all([cargarResumen(), cargarAlertasDia()]);
 }
 
@@ -590,27 +594,107 @@ async function guardarConfig() {
 }
 
 // ── CONVERSOR ─────────────────────────────────────────────
+async function cargarStatusCache() {
+  const fecha = $('conv-fecha').value || S.fecha;
+  if (!fecha) return;
+  $('conv-fecha').value = fecha;
+  const wrap = $('conv-tabla');
+  wrap.innerHTML = '<div class="empty"><span class="spinner"></span> Verificando cache...</div>';
+  try {
+    const s = await J(`/api/insumos/cache/${fecha}`);
+    _renderCacheTabla(s, wrap);
+  } catch(e) { wrap.innerHTML=`<div class="empty" style="color:var(--sk-red);">Error: ${esc(e.message)}</div>`; }
+}
+
+function _renderCacheTabla(s, wrap) {
+  const provs = Object.entries(s.proveedores||{});
+  const totalOk = s.convertidos||0;
+  const total   = s.total||provs.length;
+  const completo = s.completo;
+
+  wrap.innerHTML = `
+    <div style="margin-bottom:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <span style="font-size:.75rem;font-weight:800;color:${completo?'var(--sk-green)':'var(--sk-orange)'};">
+        ${completo ? '✓ Cache completo' : '⚠ Cache incompleto'} — ${totalOk}/${total} proveedores
+      </span>
+      <span style="font-size:.65rem;color:var(--muted2);">Infovalmer: ${esc(s.infovalmer||'')}</span>
+    </div>
+    <div class="twrap">
+    <table>
+      <thead><tr>
+        <th>Proveedor</th>
+        <th>PKL (cache)</th>
+        <th>Excel (infovalmer)</th>
+      </tr></thead>
+      <tbody>${provs.map(([prov, v])=>`
+        <tr>
+          <td><strong>${esc(prov)}</strong></td>
+          <td>${v.cache
+            ? `<span style="color:var(--sk-green);font-weight:700;">✓ ok</span>`
+            : `<span style="color:var(--sk-red);">✗ falta</span>`}</td>
+          <td>${v.excel
+            ? `<span style="color:var(--sk-green);font-weight:700;">✓ ok</span>`
+            : `<span style="color:var(--muted2);">— pendiente</span>`}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+    </div>`;
+}
+
 async function convertirFecha() {
-  const fecha = $('conv-fecha').value||S.fecha;
+  const fecha = $('conv-fecha').value || S.fecha;
   const msg   = $('conv-msg');
   const fill  = $('conv-fill');
-  if (!fecha) { msg.textContent='Selecciona una fecha'; return; }
-  msg.textContent='Convirtiendo...'; fill.style.width='10%';
+  const force = ($('conv-force')||{}).checked || false;
+  if (!fecha) { msg.textContent = 'Selecciona una fecha'; return; }
+  msg.innerHTML = '<span style="color:var(--muted2);">Convirtiendo en paralelo...</span>';
+  fill.style.width = '10%';
+  const wrap = $('conv-tabla');
+  wrap.innerHTML = '<div class="empty"><span class="spinner"></span> Procesando...</div>';
   try {
-    const r = await J(`/api/insumos/convertir/${fecha}?force=false&excel=true`);
-    fill.style.width='100%';
-    const ok = r.resultados.filter(x=>x.cache_ok);
-    msg.innerHTML=`<span style="color:var(--sk-green)">✓ ${ok.length}/${r.resultados.length} proveedores convertidos</span>`;
-    $('conv-tabla').innerHTML=`<table>
-      <thead><tr><th>Proveedor</th><th>Filas</th><th>Estado</th></tr></thead>
-      <tbody>${r.resultados.map(x=>`<tr>
-        <td><strong>${x.proveedor}</strong></td>
-        <td>${(x.filas||0).toLocaleString('es-CO')}</td>
-        <td>${x.cache_ok?'<span style="color:var(--sk-green)">✓</span>':'<span style="color:var(--sk-red)">✗ '+esc(x.error||'error')+'</span>'}</td>
-      </tr>`).join('')}</tbody></table>`;
-    // Recargar datos
-    S.tabData={}; cargarTodo();
-  } catch(e) { fill.style.width='0'; msg.innerHTML=`<span style="color:var(--sk-red)">Error: ${esc(e.message)}</span>`; }
+    const r = await fetch(`/api/insumos/convertir/${fecha}?force=${force}&excel=true`, {method:'POST'});
+    if (!r.ok) throw new Error(r.status);
+    const d = await r.json();
+    fill.style.width = '100%';
+    const ok = (d.resultados||[]).filter(x=>x.cache_ok&&!x.omitido).length;
+    const om = (d.resultados||[]).filter(x=>x.omitido).length;
+    const er = (d.resultados||[]).filter(x=>!x.cache_ok).length;
+    msg.innerHTML = `
+      <span style="color:var(--sk-green);">✓ ${ok} convertidos</span>
+      ${om ? `<span style="color:var(--muted2);margin-left:8px;">${om} ya existían</span>` : ''}
+      ${er ? `<span style="color:var(--sk-red);margin-left:8px;">✗ ${er} errores</span>` : ''}`;
+    // Mostrar tabla detallada de resultados
+    wrap.innerHTML = `
+      <div class="twrap">
+      <table>
+        <thead><tr><th>Proveedor</th><th>Filas</th><th>Estado</th><th>Excel</th></tr></thead>
+        <tbody>${(d.resultados||[]).map(x=>`
+          <tr>
+            <td><strong>${esc(x.proveedor)}</strong></td>
+            <td style="text-align:right;">${(x.filas||0).toLocaleString('es-CO')}</td>
+            <td>${x.omitido
+              ? '<span style="color:var(--muted2);">ya existía</span>'
+              : x.cache_ok
+                ? '<span style="color:var(--sk-green);font-weight:700;">✓ convertido</span>'
+                : `<span style="color:var(--sk-red);">✗ ${esc(x.error||'error')}</span>`}
+            </td>
+            <td>${x.xlsx
+              ? `<span style="color:var(--sk-green);">✓</span>`
+              : '<span style="color:var(--muted2);">—</span>'}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+      </div>
+      <div style="margin-top:8px;font-size:.65rem;color:var(--muted2);">
+        Excel guardado en: ${esc(d.status?.infovalmer||'carpeta infovalmer del día')}
+      </div>`;
+    // Recargar datos con la nueva fecha
+    S.tabData = {}; S.alertas = []; S.mdData = null; _curvaData = null;
+    cargarTodo();
+  } catch(e) {
+    fill.style.width = '0';
+    msg.innerHTML = `<span style="color:var(--sk-red);">Error: ${esc(e.message)}</span>`;
+  }
 }
 
 // ── LOGS ──────────────────────────────────────────────────
