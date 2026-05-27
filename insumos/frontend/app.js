@@ -65,26 +65,43 @@ function showTab(id, el) {
 }
 
 // ── INIT ──────────────────────────────────────────────────
+function _fmtFecha(f) {
+  return f ? `${f.slice(0,4)}-${f.slice(4,6)}-${f.slice(6)}` : '';
+}
+
 async function cargarFechas() {
-  const sel    = $('sel-fecha');
-  const selAnt = $('sel-fecha-ant');
+  const sel = $('sel-fecha');
+  sel.innerHTML = '<option value="">Cargando...</option>';
   try {
     const d = await J('/api/insumos/fechas');
     S.fechas = (d.fechas||[]).slice().reverse();
-    sel.innerHTML = S.fechas.map(f=>`<option value="${f}">${f.slice(0,4)}-${f.slice(4,6)}-${f.slice(6)}</option>`).join('');
-    // Poblar selector de fecha de comparación (excluye la primera fecha activa)
+    if (!S.fechas.length) {
+      sel.innerHTML = '<option value="">Sin fechas — verifica ruta en Config</option>';
+      _actualizarSelectorFechaAnt();
+      return;
+    }
+    // Llenar selector principal
+    sel.innerHTML = S.fechas.map(f =>
+      `<option value="${f}">${_fmtFecha(f)}</option>`
+    ).join('');
+    // Fijar fecha activa ANTES de actualizar el selector de comparación
+    S.fecha = S.fechas[0];
+    sel.value = S.fecha;
     _actualizarSelectorFechaAnt();
-    if (S.fechas.length) { S.fecha = S.fechas[0]; cargarTodo(); }
-  } catch(e) { sel.innerHTML='<option value="">Sin fechas</option>'; }
+    cargarTodo();
+  } catch(e) {
+    sel.innerHTML = '<option value="">Error cargando fechas</option>';
+    console.error('cargarFechas', e);
+  }
 }
 
 function _actualizarSelectorFechaAnt() {
   const selAnt = $('sel-fecha-ant');
   if (!selAnt) return;
-  // Mostrar todas las fechas excepto la activa, en orden cronológico desc
+  // Todas las fechas EXCEPTO la activa actual
   const otras = S.fechas.filter(f => f !== S.fecha);
   selAnt.innerHTML = '<option value="">-- Auto (anterior) --</option>' +
-    otras.map(f=>`<option value="${f}">${f.slice(0,4)}-${f.slice(4,6)}-${f.slice(6)}</option>`).join('');
+    otras.map(f => `<option value="${f}">${_fmtFecha(f)}</option>`).join('');
 }
 
 async function cargarTodo() {
