@@ -391,21 +391,56 @@
 
   <!-- ─── LOGS ─── -->
   <div class="panel" id="tab-logs">
-    <div class="fb" style="margin-bottom:8px;">
-      <button class="btn btn-ghost btn-sm" onclick="cargarLogs()">Actualizar</button>
-      <label style="display:flex;align-items:center;gap:5px;font-size:.72rem;color:var(--muted);cursor:pointer;">
-        <input type="checkbox" id="log-auto" onchange="toggleLogAuto()"/> Auto 5s
-      </label>
-      <select class="tb-sel" id="log-nivel" onchange="filtrarLogs()">
+
+    <!-- Barra de herramientas -->
+    <div class="fb" style="margin-bottom:8px;gap:6px;flex-wrap:wrap;">
+
+      <!-- Estado SSE -->
+      <div id="log-sse-badge" style="display:flex;align-items:center;gap:5px;padding:.2rem .6rem;border-radius:20px;border:1px solid var(--bdr2);background:var(--surf2);font-size:.68rem;cursor:pointer;" onclick="toggleLogSSE()" title="Tiempo real (SSE)">
+        <span id="log-sse-dot" style="width:7px;height:7px;border-radius:50%;background:var(--muted2);flex-shrink:0;transition:.3s;"></span>
+        <span id="log-sse-lbl" style="color:var(--muted);">En vivo</span>
+      </div>
+
+      <!-- Filtro nivel -->
+      <select class="tb-sel" id="log-nivel" onchange="filtrarLogs()" style="min-width:90px;">
         <option value="">Todos</option>
         <option value="INFO">INFO</option>
         <option value="WARNING">WARNING</option>
         <option value="ERROR">ERROR</option>
       </select>
-      <span id="log-cnt" style="font-size:.7rem;color:var(--muted);"></span>
+
+      <!-- Búsqueda -->
+      <input id="log-busq" class="tb-inp" type="text" placeholder="Buscar en mensajes…"
+             style="flex:1;min-width:160px;max-width:320px;"
+             oninput="filtrarLogs()"/>
+
+      <!-- Auto-scroll -->
+      <label style="display:flex;align-items:center;gap:4px;font-size:.72rem;color:var(--muted);cursor:pointer;white-space:nowrap;">
+        <input type="checkbox" id="log-scroll" checked/> Auto-scroll
+      </label>
+
+      <!-- Contador -->
+      <span id="log-cnt" style="font-size:.7rem;color:var(--muted);margin-left:4px;white-space:nowrap;"></span>
+
+      <div style="margin-left:auto;display:flex;gap:6px;">
+        <button class="btn btn-ghost btn-sm" onclick="cargarLogs()" title="Recargar buffer">↺ Recargar</button>
+        <button class="btn btn-ghost btn-sm" onclick="limpiarLogView()" title="Limpiar vista (no borra el archivo)">✕ Limpiar</button>
+        <!-- Descarga del archivo en disco -->
+        <div style="position:relative;">
+          <button class="btn btn-ghost btn-sm" onclick="toggleLogMenu()" title="Descargar log">⬇ Descargar ▾</button>
+          <div id="log-dl-menu" style="display:none;position:absolute;right:0;top:110%;background:var(--surf2);border:1px solid var(--bdr2);border-radius:6px;z-index:99;min-width:180px;padding:4px 0;">
+            <div class="log-dl-item" onclick="descargarLog('insumos.log')">insumos.log (actual)</div>
+            <div class="log-dl-item" onclick="descargarLog('insumos.log.1')">insumos.log.1</div>
+            <div class="log-dl-item" onclick="descargarLog('insumos.log.2')">insumos.log.2</div>
+            <div id="log-dl-extra"></div>
+          </div>
+        </div>
+      </div>
     </div>
-    <div class="log-wrap" id="log-wrap">
-      <div class="empty">Cargando logs...</div>
+
+    <!-- Cuerpo del log -->
+    <div class="log-wrap" id="log-wrap" style="font-family:'Cascadia Code','Fira Mono','Courier New',monospace;">
+      <div class="empty">Conectando al stream de logs…</div>
     </div>
   </div>
 

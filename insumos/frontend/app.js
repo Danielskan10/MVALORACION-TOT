@@ -51,6 +51,8 @@ function showTab(id, el) {
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   el.classList.add('active');
+  // Desconectar SSE de logs si salimos de esa tab
+  if (id !== 'tab-logs' && _logSSEon) _desconectarLogSSE();
   if (id==='tab-alertas')     renderAlertas();
   if (id==='tab-multidia')    cargarMultidia();
   if (id==='tab-curvas')      cargarCurvas();
@@ -61,7 +63,7 @@ function showTab(id, el) {
   if (id==='tab-notas')       cargarTabla('NOTAS');
   if (id==='tab-config')      cargarConfig();
   if (id==='tab-conversor')   { verificarConectividad(); cargarStatusCache(); }
-  if (id==='tab-logs')        cargarLogs();
+  if (id==='tab-logs')        { cargarLogs(); if (!_logSSEon) _conectarLogSSE(); }
 }
 
 // ── INIT ──────────────────────────────────────────────────
@@ -1002,32 +1004,176 @@ async function convertirFecha() {
   }
 }
 
-// ── LOGS ──────────────────────────────────────────────────
-async function cargarLogs() {
-  try {
-    S.logRaw = await J('/api/logs?limit=300');
-    filtrarLogs();
-    $('log-cnt').textContent = S.logRaw.length;
-  } catch(e) { $('log-wrap').innerHTML='<div class="empty">Error cargando logs</div>'; }
+// ── LOGS — tiempo real SSE + filtros + descarga ───────────────────────────
+let _logSSE    = null;   // EventSource activo
+let _logSSEon  = false;  // estado del stream
+
+/** Renderiza UNA entrada de log como HTML. */
+function _logRowHtml(l) {
+  const lvl = l.level || 'INFO';
+  const cls = lvl === 'ERROR' ? 'lE' : lvl === 'WARNING' ? 'lW' : lvl === 'CRITICAL' ? 'lC' : 'lI';
+  return `<div class="log-entry ${cls}">` +
+    `<span class="log-ts">${esc(l.ts||l.ts_iso||'')}</span>` +
+    `<span class="log-lv ${lvl}">${lvl}</span>` +
+    `<span class="log-msg">${esc(l.msg||'')}</span>` +
+    `</div>`;
 }
 
-function filtrarLogs() {
+/** Añade una entrada nueva al panel (respetando filtros activos). */
+function _logAppend(entry) {
   const nivel = ($('log-nivel')||{}).value||'';
-  const rows  = nivel ? S.logRaw.filter(l=>l.level===nivel) : S.logRaw;
-  $('log-wrap').innerHTML = rows.slice().reverse().map(l=>`
-    <div class="log-entry">
-      <span class="log-ts">${esc(l.ts)}</span>
-      <span class="log-lv ${l.level}">${l.level}</span>
-      <span class="log-msg">${esc(l.msg)}</span>
-    </div>`).join('');
+  const busq  = ($('log-busq')||{}).value||'';
+  if (nivel && entry.level !== nivel) return;
+  if (busq  && !entry.msg.toLowerCase().includes(busq.toLowerCase())) return;
+
+  const wrap = $('log-wrap');
+  // Quitar el placeholder inicial si aún existe
+  const ph = wrap.querySelector('.empty');
+  if (ph) ph.remove();
+
+  const div = document.createElement('div');
+  div.className = 'log-entry ' + (entry.level === 'ERROR' ? 'lE' :
+                                   entry.level === 'WARNING' ? 'lW' :
+                                   entry.level === 'CRITICAL' ? 'lC' : 'lI');
+  div.innerHTML =
+    `<span class="log-ts">${esc(entry.ts||entry.ts_iso||'')}</span>` +
+    `<span class="log-lv ${entry.level||''}">${esc(entry.level||'')}</span>` +
+    `<span class="log-msg">${esc(entry.msg||'')}</span>`;
+  wrap.appendChild(div);
+
+  // Limitar a 800 entradas visibles para no saturar el DOM
+  const entries = wrap.querySelectorAll('.log-entry');
+  if (entries.length > 800) entries[0].remove();
+
+  // Actualizar contador
+  const cnt = $('log-cnt');
+  if (cnt) cnt.textContent = wrap.querySelectorAll('.log-entry').length + ' entradas';
+
+  // Auto-scroll al final
+  if (($('log-scroll')||{}).checked !== false) {
+    wrap.scrollTop = wrap.scrollHeight;
+  }
 }
 
-function toggleLogAuto() {
-  if ($('log-auto').checked) {
-    S.logTimer = setInterval(cargarLogs, 5000);
+/** Conecta/desconecta el stream SSE de logs. */
+function toggleLogSSE() {
+  if (_logSSEon) {
+    _desconectarLogSSE();
   } else {
-    clearInterval(S.logTimer); S.logTimer=null;
+    _conectarLogSSE();
   }
+}
+
+function _conectarLogSSE() {
+  if (_logSSE) { _logSSE.close(); _logSSE = null; }
+
+  const dot = $('log-sse-dot');
+  const lbl = $('log-sse-lbl');
+  if (dot) dot.style.background = '#FF9500';
+  if (lbl) lbl.textContent = 'Conectando…';
+
+  _logSSE = new EventSource('/api/logs/stream');
+  _logSSEon = true;
+
+  _logSSE.onopen = () => {
+    if (dot) dot.style.background = '#00A65A';
+    if (lbl) lbl.textContent = 'En vivo ●';
+  };
+
+  _logSSE.onmessage = ev => {
+    try {
+      const entry = JSON.parse(ev.data);
+      _logAppend(entry);
+    } catch {}
+  };
+
+  _logSSE.onerror = () => {
+    if (dot) dot.style.background = '#FF3B30';
+    if (lbl) lbl.textContent = 'Error — reintentando';
+    // EventSource reintenta automáticamente; no cerramos aquí
+  };
+}
+
+function _desconectarLogSSE() {
+  if (_logSSE) { _logSSE.close(); _logSSE = null; }
+  _logSSEon = false;
+  const dot = $('log-sse-dot');
+  const lbl = $('log-sse-lbl');
+  if (dot) dot.style.background = 'var(--muted2)';
+  if (lbl) lbl.textContent = 'En vivo';
+}
+
+/** Recarga el buffer histórico completo desde el servidor. */
+async function cargarLogs() {
+  const nivel = ($('log-nivel')||{}).value||'';
+  const busq  = ($('log-busq')||{}).value||'';
+  try {
+    let url = `/api/logs?limit=500`;
+    if (nivel) url += `&level=${nivel}`;
+    if (busq)  url += `&q=${encodeURIComponent(busq)}`;
+    S.logRaw = await J(url);
+    const wrap = $('log-wrap');
+    wrap.innerHTML = S.logRaw.map(_logRowHtml).join('');
+    const cnt = $('log-cnt');
+    if (cnt) cnt.textContent = S.logRaw.length + ' entradas';
+    wrap.scrollTop = wrap.scrollHeight;
+  } catch(e) {
+    $('log-wrap').innerHTML = '<div class="empty" style="color:var(--sk-red);">Error cargando logs</div>';
+  }
+}
+
+/** Filtra la vista actual sin llamar al servidor. */
+function filtrarLogs() {
+  // Si el SSE está activo, recargar del buffer para aplicar el nuevo filtro
+  cargarLogs();
+}
+
+/** Limpia la vista (no borra el archivo). */
+function limpiarLogView() {
+  const wrap = $('log-wrap');
+  wrap.innerHTML = '<div class="empty" style="color:var(--muted);">Vista limpiada — el archivo en disco no se borró.</div>';
+  S.logRaw = [];
+  const cnt = $('log-cnt');
+  if (cnt) cnt.textContent = '';
+}
+
+/** Muestra/oculta el menú de descarga. */
+function toggleLogMenu() {
+  const m = $('log-dl-menu');
+  if (!m) return;
+  // Cargar lista de archivos disponibles la primera vez
+  if (m.dataset.loaded !== '1') {
+    fetch('/api/logs/archivos').then(r=>r.json()).then(d=>{
+      const extra = $('log-dl-extra');
+      if (extra && d.archivos) {
+        const items = d.archivos
+          .filter(a => !['insumos.log','insumos.log.1','insumos.log.2'].includes(a.nombre))
+          .map(a => `<div class="log-dl-item" onclick="descargarLog('${esc(a.nombre)}')">${esc(a.nombre)} <span style="color:var(--muted);font-size:.65rem;">(${a.kb}KB)</span></div>`)
+          .join('');
+        extra.innerHTML = items;
+      }
+      m.dataset.loaded = '1';
+    }).catch(()=>{});
+  }
+  m.style.display = m.style.display === 'none' ? 'block' : 'none';
+}
+
+// Cerrar menú descarga al click fuera
+document.addEventListener('click', e => {
+  const menu = $('log-dl-menu');
+  if (menu && menu.style.display !== 'none' && !e.target.closest('#log-dl-menu') && !e.target.closest('[onclick="toggleLogMenu()"]')) {
+    menu.style.display = 'none';
+  }
+});
+
+/** Descarga un archivo de log del disco. */
+function descargarLog(nombre) {
+  const a = document.createElement('a');
+  a.href = `/api/logs/file?archivo=${encodeURIComponent(nombre)}`;
+  a.download = nombre;
+  a.click();
+  const m = $('log-dl-menu');
+  if (m) m.style.display = 'none';
 }
 
 // ── REACTIVIDAD TEMA ──────────────────────────────────────

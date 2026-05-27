@@ -196,16 +196,41 @@ body { display:flex; flex-direction:column; min-height:100vh; overflow-x:hidden;
 .form-input:focus { outline:none; border-color:var(--sk-green); }
 
 /* ── LOGS ────────────────────────────────────────────── */
-.log-wrap { font-family:'Menlo','Consolas',monospace; font-size:.7rem; display:flex; flex-direction:column; max-height:520px; overflow-y:auto; border:1px solid var(--bdr2); border-radius:var(--rl); }
-.log-entry { display:flex; gap:8px; padding:.28rem .6rem; border-bottom:1px solid var(--bdr); }
-.log-entry:last-child { border-bottom:none; }
+.log-wrap {
+  font-family: 'Cascadia Code','Fira Mono','Menlo','Consolas',monospace;
+  font-size: .7rem;
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 220px);
+  min-height: 300px;
+  overflow-y: auto;
+  border: 1px solid var(--bdr2);
+  border-radius: var(--rl);
+  scroll-behavior: smooth;
+}
+.log-entry { display:flex; gap:8px; padding:.25rem .65rem; border-bottom:1px solid transparent; line-height:1.4; }
 .log-entry:hover { background:var(--surf2); }
-.log-ts { color:var(--muted2); flex-shrink:0; width:65px; }
-.log-lv { font-weight:800; flex-shrink:0; width:54px; }
-.log-lv.ERROR   { color:#FF3B30; }
-.log-lv.WARNING { color:#FF9500; }
-.log-lv.INFO    { color:#00A65A; }
-.log-msg { color:var(--txt2); word-break:break-word; }
+/* Colores de fila por severidad */
+.log-entry.lE { background:rgba(255,59,48,.06); border-left:2px solid #FF3B30; }
+.log-entry.lW { background:rgba(255,149,0,.05); border-left:2px solid #FF9500; }
+.log-entry.lC { background:rgba(255,59,48,.12); border-left:3px solid #FF3B30; font-weight:600; }
+.log-entry.lI { border-left:2px solid transparent; }
+.log-ts  { color:var(--muted2); flex-shrink:0; width:68px; letter-spacing:.01em; }
+.log-lv  { font-weight:800; flex-shrink:0; width:56px; }
+.log-lv.ERROR    { color:#FF3B30; }
+.log-lv.CRITICAL { color:#FF3B30; }
+.log-lv.WARNING  { color:#FF9500; }
+.log-lv.INFO     { color:#00A65A; }
+.log-msg { color:var(--txt2); word-break:break-all; flex:1; }
+/* Menú descarga */
+.log-dl-item {
+  padding: .35rem .85rem;
+  font-size: .72rem;
+  cursor: pointer;
+  color: var(--txt2);
+  white-space: nowrap;
+}
+.log-dl-item:hover { background: var(--surf3); }
 
 /* ── PROGRESS BAR ────────────────────────────────────── */
 .prog-bar  { height:4px; background:var(--surf2); border-radius:2px; overflow:hidden; margin-top:6px; }
