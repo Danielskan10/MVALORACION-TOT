@@ -69,26 +69,38 @@ function _fmtFecha(f) {
   return f ? `${f.slice(0,4)}-${f.slice(4,6)}-${f.slice(6)}` : '';
 }
 
+function _poblarSelectorFechas(fechas) {
+  const sel = $('sel-fecha');
+  S.fechas = (fechas||[]).slice().reverse();
+  if (!S.fechas.length) {
+    sel.innerHTML = '<option value="">Sin fechas — verifica ruta en Config</option>';
+    _actualizarSelectorFechaAnt();
+    return false;
+  }
+  sel.innerHTML = S.fechas.map(f => `<option value="${f}">${_fmtFecha(f)}</option>`).join('');
+  S.fecha   = S.fechas[0];
+  sel.value = S.fecha;
+  _actualizarSelectorFechaAnt();
+  return true;
+}
+
+/**
+ * Carga inicial optimizada: 1 sola llamada al servidor que devuelve
+ * fechas + resumen + alertas juntos. Elimina 2 round-trips extra.
+ */
 async function cargarFechas() {
   const sel = $('sel-fecha');
   sel.innerHTML = '<option value="">Cargando...</option>';
   try {
-    const d = await J('/api/insumos/fechas');
-    S.fechas = (d.fechas||[]).slice().reverse();
-    if (!S.fechas.length) {
-      sel.innerHTML = '<option value="">Sin fechas — verifica ruta en Config</option>';
-      _actualizarSelectorFechaAnt();
-      return;
-    }
-    // Llenar selector principal
-    sel.innerHTML = S.fechas.map(f =>
-      `<option value="${f}">${_fmtFecha(f)}</option>`
-    ).join('');
-    // Fijar fecha activa ANTES de actualizar el selector de comparación
-    S.fecha = S.fechas[0];
-    sel.value = S.fecha;
-    _actualizarSelectorFechaAnt();
-    cargarTodo();
+    // Primero obtenemos las fechas (ligero) para poblar el selector rápido
+    const df = await J('/api/insumos/fechas');
+    if (!_poblarSelectorFechas(df.fechas)) return;
+
+    // Si encontró fechas, también conectar verificarConectividad en paralelo
+    verificarConectividad().catch(()=>{});
+
+    // Luego cargamos todo lo demás ya con fecha activa conocida
+    await cargarTodoDesdeCero();
   } catch(e) {
     sel.innerHTML = '<option value="">Error cargando fechas</option>';
     console.error('cargarFechas', e);
@@ -98,10 +110,40 @@ async function cargarFechas() {
 function _actualizarSelectorFechaAnt() {
   const selAnt = $('sel-fecha-ant');
   if (!selAnt) return;
-  // Todas las fechas EXCEPTO la activa actual
   const otras = S.fechas.filter(f => f !== S.fecha);
   selAnt.innerHTML = '<option value="">-- Auto (anterior) --</option>' +
     otras.map(f => `<option value="${f}">${_fmtFecha(f)}</option>`).join('');
+}
+
+/**
+ * Usa /inicio/{fecha} — 1 request que trae resumen + alertas juntos.
+ * Llamado solo al arrancar (cargarFechas) o al cambiar umbral.
+ */
+async function cargarTodoDesdeCero() {
+  if (!S.fecha) return;
+  S.tabData = {}; S.alertas = []; S.spData = []; S.mdData = null; _curvaData = null;
+  actualizarBadgesFecha();
+  const convFecha = $('conv-fecha');
+  if (convFecha && !convFecha.value) convFecha.value = S.fecha;
+  S.umbral = parseFloat($('inp-umbral').value)||3;
+  const fechaAnt = ($('sel-fecha-ant')||{}).value || '';
+  try {
+    let url = `/api/insumos/inicio/${S.fecha}?umbral_pct=${S.umbral}`;
+    if (fechaAnt) url += `&fecha_ant=${fechaAnt}`;
+    const d = await J(url);
+    // Actualizar fechas si el backend devuelve más
+    if (d.fechas && d.fechas.length > S.fechas.length) {
+      _poblarSelectorFechas(d.fechas);
+    }
+    // Aplicar resumen
+    if (d.resumen) _aplicarResumen(d.resumen);
+    // Aplicar alertas
+    if (d.alertas) _aplicarAlertas(d.alertas, fechaAnt);
+  } catch(e) {
+    console.error('cargarTodoDesdeCero', e);
+    // Fallback: carga por separado
+    await Promise.all([cargarResumen(), cargarAlertasDia()]);
+  }
 }
 
 async function cargarTodo() {
@@ -111,28 +153,57 @@ async function cargarTodo() {
   S.tabData = {}; S.alertas = []; S.spData = []; S.mdData = null; _curvaData = null;
   actualizarBadgesFecha();
   _actualizarSelectorFechaAnt();
-  // Sincronizar campo conversor con la fecha activa
   const convFecha = $('conv-fecha');
   if (convFecha && !convFecha.value) convFecha.value = S.fecha;
   await Promise.all([cargarResumen(), cargarAlertasDia()]);
 }
 
 // ── RESUMEN KPIs ──────────────────────────────────────────
+function _aplicarResumen(data) {
+  const sp   = data.find(d=>d.proveedor==='SP')||{};
+  const sw   = data.find(d=>d.proveedor==='SW')||{};
+  const mx   = data.find(d=>d.proveedor==='MX')||{};
+  const notas= data.find(d=>d.proveedor==='NOTAS')||{};
+  const prov = data.filter(d=>d.disponible).length;
+  $('kpi-titulos').textContent = (sp.total||0).toLocaleString('es-CO');
+  $('kpi-prov').textContent    = prov+'/'+data.length;
+  $('kpi-sp-pm').textContent   = sp.precio_promedio != null ? fmtP(sp.precio_promedio,4) : '—';
+  $('kpi-mx').textContent      = (mx.total||0).toLocaleString('es-CO');
+  $('kpi-notas').textContent   = (notas.total||0).toLocaleString('es-CO');
+  $('kpi-sw').textContent      = (sw.total||0).toLocaleString('es-CO');
+}
+
+function _aplicarAlertas(d, fechaAnt) {
+  S.alertas  = d.alertas || [];
+  S.fechaAnt = d.fecha_ant || '';
+  if (d.fechas_disponibles && d.fechas_disponibles.length) {
+    const prev = S.fecha;
+    S.fechas = d.fechas_disponibles.slice().reverse();
+    const sel = $('sel-fecha');
+    sel.innerHTML = S.fechas.map(f=>`<option value="${f}">${_fmtFecha(f)}</option>`).join('');
+    sel.value = prev || S.fechas[0];
+    S.fecha   = sel.value;
+    _actualizarSelectorFechaAnt();
+    if (fechaAnt) $('sel-fecha-ant').value = fechaAnt;
+  }
+  $('kpi-alertas').textContent   = S.alertas.length;
+  $('kpi-criticas').textContent  = d.criticas||0;
+  $('kpi-fecha-ant').textContent = d.fecha_ant
+    ? _fmtFecha(d.fecha_ant) : '—';
+  const wrap = $('wrap-alertas');
+  if (wrap) wrap.innerHTML = '';
+  renderBannerAlerta(d);
+  renderAlertas();
+  renderTopVariaciones();
+  renderRallyCards();
+  renderHeatmap();
+  renderChartAlertas();
+}
+
 async function cargarResumen() {
   try {
     const data = await J(`/api/insumos/resumen/${S.fecha}`);
-    const sp = data.find(d=>d.proveedor==='SP')||{};
-    const sw = data.find(d=>d.proveedor==='SW')||{};
-    const mx = data.find(d=>d.proveedor==='MX')||{};
-    const notas = data.find(d=>d.proveedor==='NOTAS')||{};
-    const tot = data.reduce((s,d)=>s+(d.total||0),0);
-    const prov = data.filter(d=>d.disponible).length;
-    $('kpi-titulos').textContent  = (sp.total||0).toLocaleString('es-CO');
-    $('kpi-prov').textContent     = prov+'/'+data.length;
-    $('kpi-sp-pm').textContent    = sp.precio_promedio != null ? fmtP(sp.precio_promedio,4) : '—';
-    $('kpi-mx').textContent       = (mx.total||0).toLocaleString('es-CO');
-    $('kpi-notas').textContent    = (notas.total||0).toLocaleString('es-CO');
-    $('kpi-sw').textContent       = (sw.total||0).toLocaleString('es-CO');
+    _aplicarResumen(data);
   } catch(e) { console.warn('resumen',e); }
 }
 
@@ -151,25 +222,7 @@ async function cargarAlertasDia() {
     let url = `/api/insumos/alertas/${S.fecha}?umbral_pct=${S.umbral}`;
     if (fechaAnt) url += `&fecha_ant=${fechaAnt}`;
     const d = await J(url);
-    S.alertas = d.alertas || [];
-    S.fechaAnt = d.fecha_ant || '';
-    // Actualizar selector con las fechas disponibles que devuelve el backend
-    if (d.fechas_disponibles && d.fechas_disponibles.length) {
-      S.fechas = d.fechas_disponibles.slice().reverse();
-      _actualizarSelectorFechaAnt();
-      // Restaurar selección
-      if (fechaAnt) $('sel-fecha-ant').value = fechaAnt;
-    }
-    $('kpi-alertas').textContent   = S.alertas.length;
-    $('kpi-criticas').textContent  = d.criticas||0;
-    $('kpi-fecha-ant').textContent = d.fecha_ant
-      ? `${d.fecha_ant.slice(0,4)}-${d.fecha_ant.slice(4,6)}-${d.fecha_ant.slice(6)}` : '—';
-    renderBannerAlerta(d);
-    renderAlertas();
-    renderTopVariaciones();
-    renderRallyCards();
-    renderHeatmap();
-    renderChartAlertas();
+    _aplicarAlertas(d, fechaAnt);
   } catch(e) {
     wrap.innerHTML = `<div class="empty">Sin fecha anterior disponible para comparar.</div>`;
     S.alertas = [];

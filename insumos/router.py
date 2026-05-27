@@ -15,11 +15,13 @@ Optimizaciones:
 from __future__ import annotations
 
 import re
+import time
 import logging
+import threading
 import concurrent.futures
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 
 import pandas as pd
 import numpy as np
@@ -32,6 +34,29 @@ logger = logging.getLogger("insumos")
 router = APIRouter()
 
 _ROOT = Path(__file__).parent.parent.parent
+
+# ── Caché en memoria (TTL=600s) ───────────────────────────────────────────────
+_MEM_CACHE: Dict[str, Tuple[float, Any]] = {}   # key → (ts, valor)
+_MEM_LOCK  = threading.Lock()
+_MEM_TTL   = 600   # 10 minutos
+
+def _mem_get(key: str) -> Any:
+    with _MEM_LOCK:
+        entry = _MEM_CACHE.get(key)
+        if entry and (time.time() - entry[0]) < _MEM_TTL:
+            return entry[1]
+    return None
+
+def _mem_set(key: str, val: Any):
+    with _MEM_LOCK:
+        _MEM_CACHE[key] = (time.time(), val)
+
+def _mem_invalidate(prefix: str = ""):
+    """Invalida entradas cuya clave empiece con prefix (vacía todo si prefix='')."""
+    with _MEM_LOCK:
+        keys = [k for k in _MEM_CACHE if k.startswith(prefix)]
+        for k in keys:
+            del _MEM_CACHE[k]
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -960,6 +985,10 @@ def convertir_insumos(
            "msg": f"Completado: {sum(1 for r in resultados if r.get('cache_ok'))} OK / {total_provs}",
            "ok": ok})
 
+    # Invalidar caché en memoria para esta fecha (datos recién convertidos)
+    _mem_invalidate(f"resumen:{fecha}")
+    _mem_invalidate(f"alertas:{fecha}:")
+
     return {
         "ok":         ok,
         "fecha":      fecha,
@@ -1019,31 +1048,89 @@ def get_fechas():
     return {"fechas": _fechas_disponibles()}
 
 
+@router.get("/inicio/{fecha}")
+def get_inicio(
+    fecha: str,
+    umbral_pct: float = Query(5.0),
+    fecha_ant: Optional[str] = Query(None),
+):
+    """
+    Endpoint de arranque: devuelve fechas + resumen + alertas en una sola llamada.
+    Reduce los round-trips al cargar la página de 3 a 1.
+    """
+    import concurrent.futures as _cf
+
+    fechas = _fechas_disponibles()
+
+    # Determinar fecha anterior
+    if fecha_ant:
+        fa = fecha_ant
+    else:
+        idx = fechas.index(fecha) if fecha in fechas else -1
+        fa  = fechas[idx - 1] if idx > 0 else None
+
+    # Lanzar resumen y alertas en paralelo
+    with _cf.ThreadPoolExecutor(max_workers=2) as pool:
+        fut_res = pool.submit(resumen_proveedores, fecha)
+        if fa:
+            fut_alt = pool.submit(get_alertas, fecha, umbral_pct, fa)
+        else:
+            fut_alt = None
+
+        resumen  = fut_res.result()
+        alertas  = fut_alt.result() if fut_alt else {
+            "alertas": [], "total": 0, "msg": "Sin fecha anterior",
+            "fechas_disponibles": fechas, "fecha_ant": None,
+            "criticas": 0, "altas": 0, "medias": 0,
+        }
+
+    return {
+        "fechas":   fechas,
+        "resumen":  resumen,
+        "alertas":  alertas,
+    }
+
+
 @router.get("/resumen/{fecha}")
 def resumen_proveedores(fecha: str):
-    """Cuántos títulos / registros tiene cada proveedor. Carga desde cache."""
-    resultado = []
-    for nombre, fn in CARGADORES.items():
+    """Cuántos títulos / registros tiene cada proveedor. Paralelo + caché 10min."""
+    cache_key = f"resumen:{fecha}"
+    cached = _mem_get(cache_key)
+    if cached is not None:
+        return cached
+
+    def _uno(nombre_fn):
+        nombre, fn = nombre_fn
         try:
             df = fn(fecha)
-            precios = pd.to_numeric(
-                df.get("PRECIO", pd.Series()), errors="coerce"
-            ).dropna() if not df.empty else pd.Series(dtype=float)
-            resultado.append({
-                "proveedor":      nombre,
-                "total":          len(df),
-                "con_precio":     int(precios.count()),
-                "sin_precio":     int(len(df) - precios.count()),
-                "precio_promedio": round(float(precios.mean()), 6) if len(precios) else None,
-                "precio_max":     round(float(precios.max()), 6) if len(precios) else None,
-                "precio_min":     round(float(precios.min()), 6) if len(precios) else None,
-                "disponible":     not df.empty,
-            })
+            if df.empty:
+                return {"proveedor": nombre, "total": 0, "con_precio": 0,
+                        "sin_precio": 0, "precio_promedio": None,
+                        "precio_max": None, "precio_min": None, "disponible": False}
+            n = len(df)
+            if "PRECIO" in df.columns:
+                p = pd.to_numeric(df["PRECIO"], errors="coerce").dropna()
+                return {
+                    "proveedor":       nombre,
+                    "total":           n,
+                    "con_precio":      int(p.count()),
+                    "sin_precio":      int(n - p.count()),
+                    "precio_promedio": round(float(p.mean()), 4) if len(p) else None,
+                    "precio_max":      round(float(p.max()),  4) if len(p) else None,
+                    "precio_min":      round(float(p.min()),  4) if len(p) else None,
+                    "disponible":      True,
+                }
+            return {"proveedor": nombre, "total": n, "con_precio": 0,
+                    "sin_precio": n, "precio_promedio": None,
+                    "precio_max": None, "precio_min": None, "disponible": True}
         except Exception as e:
-            resultado.append({
-                "proveedor": nombre, "error": str(e),
-                "total": 0, "con_precio": 0, "sin_precio": 0, "disponible": False,
-            })
+            return {"proveedor": nombre, "error": str(e),
+                    "total": 0, "con_precio": 0, "sin_precio": 0, "disponible": False}
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+        resultado = list(pool.map(_uno, CARGADORES.items()))
+
+    _mem_set(cache_key, resultado)
     return resultado
 
 
@@ -1212,6 +1299,91 @@ def variaciones_entre_fechas(
     return _df_to_records(merged, 5000)
 
 
+def _alertas_proveedor(nombre: str, fn, fecha: str, fa: str,
+                        umbral_pct: float) -> List[Dict[str, Any]]:
+    """
+    Calcula alertas de UN proveedor de forma vectorizada (sin iterrows).
+    Retorna lista de dicts ya lista para serializar.
+    """
+    META_COLS: Dict[str, List[str]] = {
+        "SP":    ["NEMO", "Tipo_Tasa", "Vcto", "Moneda", "Plazo", "TIR"],
+        "SW":    ["NEMO", "Tipo_Registro"],
+        "SV":    ["Codigo", "Tipo", "Plazo"],
+        "MX":    ["ISIN"],
+        "MX_RV": ["ISIN"],
+        "NOTAS": ["ISIN"],
+        "TP":    ["Codigo", "ISIN"],
+    }
+    meta_extra = META_COLS.get(nombre, [])
+    try:
+        df_h = fn(fecha)
+        df_a = fn(fa)
+        if df_h.empty or df_a.empty:
+            return []
+
+        cols_h = ["ID", "PRECIO"] + [c for c in meta_extra if c in df_h.columns]
+        cols_h = list(dict.fromkeys(cols_h))
+
+        # Descripción si existe
+        desc_col = next((c for c in ["Nombre", "Descripcion", "Emisor", "Descripción"]
+                         if c in df_h.columns), None)
+        if desc_col and "Descripcion" not in cols_h:
+            df_h = df_h.copy()
+            df_h["Descripcion"] = df_h[desc_col]
+            cols_h.append("Descripcion")
+
+        df_h2 = df_h[cols_h].copy()
+        df_a2 = df_a[["ID", "PRECIO"]].copy()
+
+        df_h2["ID"] = df_h2["ID"].astype(str).str.strip().str.upper()
+        df_a2["ID"] = df_a2["ID"].astype(str).str.strip().str.upper()
+
+        df_h2["PRECIO"] = pd.to_numeric(df_h2["PRECIO"], errors="coerce")
+        df_a2["PRECIO"] = pd.to_numeric(df_a2["PRECIO"], errors="coerce")
+
+        merged = df_h2.merge(df_a2, on="ID", suffixes=("_HOY", "_ANT"))
+        merged.dropna(subset=["PRECIO_HOY", "PRECIO_ANT"], inplace=True)
+        merged = merged[merged["PRECIO_ANT"] != 0]
+        if merged.empty:
+            return []
+
+        merged["VAR_ABS"] = (merged["PRECIO_HOY"] - merged["PRECIO_ANT"]).round(6)
+        merged["VAR_PCT"] = (merged["VAR_ABS"] / merged["PRECIO_ANT"].abs() * 100).round(4)
+        anorm = merged[merged["VAR_PCT"].abs() > umbral_pct].copy()
+        if anorm.empty:
+            return []
+
+        # Severidad vectorizada
+        sev_abs = anorm["VAR_PCT"].abs()
+        anorm["SEVERIDAD"] = np.where(
+            sev_abs > umbral_pct * 3, "CRITICA",
+            np.where(sev_abs > umbral_pct * 1.5, "ALTA", "MEDIA")
+        )
+        anorm["FUENTE"]    = nombre
+        anorm["FECHA_HOY"] = fecha
+        anorm["FECHA_ANT"] = fa
+        anorm["ISIN"]      = anorm["ID"]   # alias
+
+        # Limpiar inf/nan en columnas object y float
+        for col in anorm.select_dtypes(include="object").columns:
+            anorm[col] = anorm[col].where(anorm[col].notna(), other=None)
+        for col in anorm.select_dtypes(include="float").columns:
+            anorm[col] = anorm[col].where(np.isfinite(anorm[col]), other=None)
+
+        # Columnas finales a exportar
+        out_cols = (["ID", "ISIN", "FUENTE", "PRECIO_HOY", "PRECIO_ANT",
+                     "VAR_ABS", "VAR_PCT", "SEVERIDAD", "FECHA_HOY", "FECHA_ANT"]
+                    + [c for c in meta_extra if c in anorm.columns]
+                    + (["Descripcion"] if "Descripcion" in anorm.columns else []))
+        out_cols = list(dict.fromkeys(out_cols))
+
+        return anorm[out_cols].to_dict(orient="records")
+
+    except Exception as e:
+        logger.error(f"Error alertas {nombre}: {e}", exc_info=True)
+        return []
+
+
 @router.get("/alertas/{fecha}")
 def get_alertas(
     fecha: str,
@@ -1219,8 +1391,7 @@ def get_alertas(
     fecha_ant: Optional[str] = Query(None, description="Fecha anterior explícita"),
 ):
     """
-    Alertas de variación anormal de precio entre fecha y su anterior.
-    Incluye NEMO, metadatos del título y variación absoluta.
+    Alertas de variación anormal — vectorizado + paralelo + caché 10 min.
     """
     fechas = _fechas_disponibles()
     if fecha_ant:
@@ -1232,93 +1403,27 @@ def get_alertas(
                     "fechas_disponibles": fechas}
         fa = fechas[idx - 1]
 
-    # Columnas de metadatos que enriquecen cada alerta (según proveedor)
-    META_COLS: Dict[str, List[str]] = {
-        "SP":    ["NEMO", "Tipo_Tasa", "Vcto", "Moneda", "Plazo", "TIR"],
-        "SW":    ["NEMO", "Tipo_Registro"],
-        "SV":    ["Codigo", "Tipo", "Plazo"],
-        "MX":    ["ISIN"],      # ID ya es ISIN; agrega columna Descripcion si existe
-        "MX_RV": ["ISIN"],
-        "NOTAS": ["ISIN"],
-        "TP":    ["Codigo", "ISIN"],
-    }
+    cache_key = f"alertas:{fecha}:{fa}:{umbral_pct}"
+    cached = _mem_get(cache_key)
+    if cached is not None:
+        cached["fechas_disponibles"] = fechas   # siempre fresco
+        return cached
 
-    alertas = []
-    for nombre, fn in CARGADORES.items():
-        if nombre == "SB":          # SB no tiene precios comparables
-            continue
-        meta_extra = META_COLS.get(nombre, [])
-        try:
-            df_h = fn(fecha)
-            df_a = fn(fa)
-            if df_h.empty or df_a.empty:
-                continue
+    # Cargar todos los proveedores en paralelo (excepto SB)
+    provs = [(n, fn) for n, fn in CARGADORES.items() if n != "SB"]
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(provs)) as pool:
+        parciales = list(pool.map(
+            lambda x: _alertas_proveedor(x[0], x[1], fecha, fa, umbral_pct),
+            provs
+        ))
 
-            # Columnas a incluir: ID, PRECIO + meta del hoy
-            cols_h = ["ID", "PRECIO"] + [c for c in meta_extra if c in df_h.columns]
-            # Aseguramos unicidad (algunos proveedores ya tienen ISIN = ID)
-            cols_h = list(dict.fromkeys(cols_h))
+    alertas: List[Dict] = []
+    for rows in parciales:
+        alertas.extend(rows)
 
-            df_h2 = df_h[cols_h].copy()
-            df_a2 = df_a[["ID", "PRECIO"]].copy()
+    alertas.sort(key=lambda x: abs(x.get("VAR_PCT") or 0), reverse=True)
 
-            for df in (df_h2, df_a2):
-                df["ID"] = df["ID"].astype(str).str.strip().str.upper()
-
-            df_h2["PRECIO"] = pd.to_numeric(df_h2["PRECIO"], errors="coerce")
-            df_a2["PRECIO"] = pd.to_numeric(df_a2["PRECIO"], errors="coerce")
-
-            # Para MX/NOTAS/TP/MX_RV intentamos agregar nombre/descripción si existe
-            desc_col = next(
-                (c for c in ["Nombre", "Descripcion", "Emisor", "Descripción"]
-                 if c in df_h.columns), None
-            )
-            if desc_col and desc_col not in df_h2.columns:
-                df_h2["Descripcion"] = df_h[desc_col].values
-
-            merged = (
-                df_h2.merge(df_a2, on="ID", suffixes=("_HOY", "_ANT"))
-                .dropna(subset=["PRECIO_HOY", "PRECIO_ANT"])
-            )
-            merged = merged[merged["PRECIO_ANT"] != 0]
-            merged["VAR_ABS"] = (merged["PRECIO_HOY"] - merged["PRECIO_ANT"]).round(6)
-            merged["VAR_PCT"] = (
-                merged["VAR_ABS"] / merged["PRECIO_ANT"].abs() * 100
-            ).round(4)
-            anorm = merged[merged["VAR_PCT"].abs() > umbral_pct]
-
-            for _, r in anorm.iterrows():
-                sev_abs = abs(r["VAR_PCT"])
-                sev = ("CRITICA" if sev_abs > umbral_pct * 3
-                       else "ALTA" if sev_abs > umbral_pct * 1.5
-                       else "MEDIA")
-                row: Dict[str, Any] = {
-                    "ID":         r["ID"],
-                    "ISIN":       r["ID"],   # alias por compatibilidad JS
-                    "FUENTE":     nombre,
-                    "PRECIO_HOY": round(float(r["PRECIO_HOY"]), 6),
-                    "PRECIO_ANT": round(float(r["PRECIO_ANT"]), 6),
-                    "VAR_ABS":    round(float(r["VAR_ABS"]), 6),
-                    "VAR_PCT":    round(float(r["VAR_PCT"]), 4),
-                    "SEVERIDAD":  sev,
-                    "FECHA_HOY":  fecha,
-                    "FECHA_ANT":  fa,
-                }
-                # Meta extra
-                for col in meta_extra:
-                    if col in r.index:
-                        v = r[col]
-                        row[col] = None if (isinstance(v, float) and not np.isfinite(v)) else v
-                if "Descripcion" in r.index:
-                    v = r["Descripcion"]
-                    row["Descripcion"] = None if (isinstance(v, float) and not np.isfinite(v)) else v
-                alertas.append(row)
-
-        except Exception as e:
-            logger.error(f"Error alertas {nombre}: {e}", exc_info=True)
-
-    alertas.sort(key=lambda x: abs(x["VAR_PCT"]), reverse=True)
-    return {
+    result = {
         "total":              len(alertas),
         "fecha":              fecha,
         "fecha_ant":          fa,
@@ -1329,6 +1434,8 @@ def get_alertas(
         "medias":             sum(1 for a in alertas if a["SEVERIDAD"] == "MEDIA"),
         "alertas":            alertas,
     }
+    _mem_set(cache_key, result)
+    return result
 
 
 @router.get("/alertas_multidia/{fecha}")
