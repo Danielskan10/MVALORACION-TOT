@@ -274,20 +274,22 @@
   <div class="panel" id="tab-config">
     <div style="max-width:640px;">
       <div class="cfg-section">
-        <div class="cfg-title">Rutas</div>
-        <div class="form-group">
-          <label class="form-label">Carpeta de datos (data_dir)</label>
-          <input class="form-input" id="cfg-data-dir" type="text" placeholder="data"/>
-        </div>
+        <div class="cfg-title">Ruta Infovalmer</div>
+        <p style="font-size:.73rem;color:var(--muted2);margin-bottom:8px;">
+          Carpeta base donde Infovalmer guarda los archivos por fecha.<br/>
+          Estructura: <code>infovalmer_dir/YYYYMMDD/</code> con los archivos fuente,
+          y subcarpetas <code>pkl/</code> y <code>excel/</code> creadas automáticamente.
+        </p>
         <div class="form-group">
           <label class="form-label">Carpeta Infovalmer (infovalmer_dir)</label>
-          <input class="form-input" id="cfg-infovalmer" type="text" placeholder="J:\VALORACION\...\INFOVALMER"/>
+          <input class="form-input" id="cfg-infovalmer" type="text"
+                 placeholder="J:\VALORACION\VALORACION_ESPECIAL\Bolsa\INFOVALMER"/>
         </div>
       </div>
       <div class="cfg-section">
         <div class="cfg-title">Umbrales</div>
         <div class="form-group">
-          <label class="form-label">Umbral variacion % (umbral_variacion_pct)</label>
+          <label class="form-label">Umbral variacion % para alertas</label>
           <input class="form-input" id="cfg-umbral" type="number" step="0.1" placeholder="3" style="width:120px;"/>
         </div>
       </div>

@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Configuración local del módulo Insumos.
-Lee y escribe config.yaml en la misma carpeta del módulo.
+"""
+Configuración del módulo Insumos.
+Todo el almacenamiento (PKL + XLSX) vive DENTRO de infovalmer_dir/FECHA/.
+No existe carpeta data_dir separada.
 """
 from __future__ import annotations
 
@@ -17,19 +19,18 @@ _MODULE_DIR  = Path(__file__).parent
 _CONFIG_FILE = _MODULE_DIR / "config.yaml"
 
 _DEFAULTS: Dict[str, Any] = {
-    # Directorio donde se guardan los .pkl / .xlsx procesados
-    "data_dir":       str(_MODULE_DIR / "data"),
-    # Carpeta base de Infovalmer (subcarpetas YYYYMMDD)
+    # Carpeta base de Infovalmer — subcarpetas YYYYMMDD con los archivos fuente
+    # Estructura resultante por fecha:
+    #   infovalmer_dir/FECHA/          ← archivos crudos (SP*.001, MX*.txt, …)
+    #   infovalmer_dir/FECHA/pkl/      ← cache rápido .pkl por proveedor
+    #   infovalmer_dir/FECHA/excel/    ← archivos .xlsx exportados
     "infovalmer_dir": r"J:\VALORACION\VALORACION_ESPECIAL\Bolsa\INFOVALMER",
-    # Umbrales de alerta
-    "umbral_variacion_pct": 0.5,
+    # Umbral de variación de precio para alertas (%)
+    "umbral_variacion_pct": 3.0,
     # Servidor
     "host":   "0.0.0.0",
     "port":   8001,
-    "reload": True,
-    # Proxies / SSL (opcional)
-    "proxy":      "",
-    "ssl_verify": True,
+    "reload": False,
 }
 
 
@@ -58,10 +59,3 @@ def update_config(updates: Dict[str, Any]) -> Dict[str, Any]:
     cfg.update(updates)
     _save(cfg)
     return cfg
-
-
-def get_data_dir() -> Path:
-    cfg = _load()
-    p = Path(cfg.get("data_dir", _DEFAULTS["data_dir"]))
-    p.mkdir(parents=True, exist_ok=True)
-    return p

@@ -20,7 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from config import get_config, update_config, get_data_dir
+from config import get_config, update_config
 import router as insumos_router
 
 # ── Logging: solo el módulo insumos, sin ruido de uvicorn / fastapi ──────────
@@ -78,19 +78,15 @@ app.include_router(insumos_router.router, prefix="/api/insumos", tags=["Insumos"
 
 # ── Config endpoints ─────────────────────────────────────────────────────────
 class ConfigUpdate(BaseModel):
-    data_dir:             Optional[str]   = None
     infovalmer_dir:       Optional[str]   = None
     umbral_variacion_pct: Optional[float] = None
     host:                 Optional[str]   = None
     port:                 Optional[int]   = None
-    proxy:                Optional[str]   = None
-    ssl_verify:           Optional[bool]  = None
 
 
 @app.get("/api/config", tags=["Config"])
 def get_config_endpoint():
     cfg = get_config()
-    cfg["data_dir_exists"]       = os.path.isdir(cfg.get("data_dir", ""))
     cfg["infovalmer_dir_exists"] = os.path.isdir(cfg.get("infovalmer_dir", ""))
     return cfg
 
@@ -130,16 +126,16 @@ def catch_all(path: str):
 # ── Conversión automática al inicio ──────────────────────────────────────────
 def _auto_convertir():
     """
-    Corre en hilo separado tras el arranque.
-    Para la fecha más reciente disponible en Infovalmer:
-      - Si todos los PKL ya existen → solo reporta, no reconvierte.
-      - Si faltan → convierte los que falten y exporta Excel a la misma
-        carpeta de infovalmer del día.
+    Corre en hilo daemon después del arranque.
+    Para CADA fecha disponible en Infovalmer (orden desc, máx 2 recientes):
+      - Verifica si PKL + XLSX ya existen.
+      - Si faltan → convierte y exporta en:
+          infovalmer/FECHA/pkl/PROVEEDOR_FECHA.pkl
+          infovalmer/FECHA/excel/PROVEEDOR_FECHA.xlsx
     """
     try:
         from router import (
-            _fechas_disponibles, _cache_status, _cache_path,
-            _leer_cache, _guardar_cache, _infovalmer_dir,
+            _fechas_disponibles, _cache_status, _guardar_cache,
             cargar_sp, cargar_sw, cargar_tp, cargar_sv,
             cargar_mx, cargar_mx_rv, cargar_notas, cargar_sb, cargar_monedas,
         )
@@ -147,73 +143,67 @@ def _auto_convertir():
 
         fechas = _fechas_disponibles()
         if not fechas:
-            logger.warning("Auto-conversión: no se encontraron fechas en Infovalmer ni en data_dir.")
+            logger.warning("Auto-conversión: Infovalmer no accesible o sin fechas.")
             return
 
-        fecha = fechas[-1]          # la más reciente
-        status = _cache_status(fecha)
-        conv  = status["convertidos"]
-        total = status["total"]
+        # Procesar las 2 fechas más recientes (hoy + anterior)
+        for fecha in reversed(fechas[-2:]):
+            status = _cache_status(fecha)
+            pkl_ok = status["pkl_ok"]
+            total  = status["total"]
 
-        if status["completo"]:
+            if status["completo"] and status["xlsx_ok"] == total:
+                logger.info(
+                    f"[{fecha}] Cache completo ({pkl_ok}/{total} PKL, "
+                    f"{status['xlsx_ok']}/{total} XLSX). Sin conversión."
+                )
+                continue
+
+            faltantes = [
+                p for p, v in status["proveedores"].items()
+                if not v["pkl"] or not v["xlsx"]
+            ]
             logger.info(
-                f"Auto-conversión [{fecha}]: cache completo — "
-                f"{conv}/{total} proveedores listos. Sin necesidad de reconvertir."
+                f"[{fecha}] Convirtiendo {len(faltantes)} proveedores: "
+                f"{', '.join(faltantes)}"
             )
-            return
 
-        faltantes = [p for p, v in status["proveedores"].items() if not v["cache"]]
-        logger.info(
-            f"Auto-conversión [{fecha}]: {conv}/{total} en cache. "
-            f"Convirtiendo: {', '.join(faltantes)}"
-        )
+            cargadores = {
+                "SP": cargar_sp, "SW": cargar_sw, "TP": cargar_tp,
+                "SV": cargar_sv, "MX": cargar_mx, "MX_RV": cargar_mx_rv,
+                "NOTAS": cargar_notas, "SB": cargar_sb, "MONEDAS": cargar_monedas,
+            }
 
-        cargadores = {
-            "SP": cargar_sp, "SW": cargar_sw, "TP": cargar_tp,
-            "SV": cargar_sv, "MX": cargar_mx,  "MX_RV": cargar_mx_rv,
-            "NOTAS": cargar_notas, "SB": cargar_sb, "MONEDAS": cargar_monedas,
-        }
-        infovalmer_dia = _infovalmer_dir(fecha)
-
-        def _uno(proveedor):
-            loader = cargadores.get(proveedor)
-            if not loader:
-                return proveedor, 0, False, "sin cargador"
-            try:
-                df = loader(fecha, use_cache=False)
-                if df.empty:
-                    return proveedor, 0, False, "archivo no encontrado"
-                # PKL en cache_insumos (acceso rápido)
-                _guardar_cache(fecha, proveedor, df, export_excel=False)
-                # Excel en carpeta infovalmer del día
-                if infovalmer_dia.exists():
-                    xlsx_path = infovalmer_dia / f"{proveedor}_{fecha}.xlsx"
-                    try:
-                        df.to_excel(xlsx_path, index=False)
-                        logger.info(f"  {proveedor}: {len(df)} filas → {xlsx_path.name}")
-                    except Exception as xe:
-                        logger.warning(f"  {proveedor}: Excel falló ({xe}), solo PKL.")
-                else:
-                    logger.warning(
-                        f"  {proveedor}: carpeta infovalmer no accesible "
-                        f"({infovalmer_dia}), Excel omitido."
+            def _uno(proveedor, _fecha=fecha):
+                loader = cargadores.get(proveedor)
+                if not loader:
+                    return proveedor, 0, False
+                try:
+                    df = loader(_fecha, use_cache=False)
+                    if df.empty:
+                        logger.warning(f"  [{_fecha}] {proveedor}: fuente vacía o no encontrada")
+                        return proveedor, 0, False
+                    _guardar_cache(_fecha, proveedor, df, export_excel=True)
+                    logger.info(
+                        f"  [{_fecha}] {proveedor}: {len(df):,} filas "
+                        f"→ pkl + excel OK"
                     )
-                return proveedor, len(df), True, None
-            except Exception as e:
-                logger.error(f"  {proveedor}: error — {e}")
-                return proveedor, 0, False, str(e)
+                    return proveedor, len(df), True
+                except Exception as e:
+                    logger.error(f"  [{_fecha}] {proveedor}: {e}")
+                    return proveedor, 0, False
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
-            resultados = list(pool.map(_uno, faltantes))
+            with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+                resultados = list(pool.map(_uno, faltantes))
 
-        ok = sum(1 for _, _, s, _ in resultados if s)
-        logger.info(
-            f"Auto-conversión [{fecha}] completada: "
-            f"{ok}/{len(faltantes)} nuevos proveedores convertidos."
-        )
+            ok = sum(1 for _, _, s in resultados if s)
+            logger.info(
+                f"[{fecha}] Conversión completada: {ok}/{len(faltantes)} OK. "
+                f"PKL → infovalmer/{fecha}/pkl/   XLSX → infovalmer/{fecha}/excel/"
+            )
 
     except Exception as e:
-        logger.error(f"Auto-conversión falló: {e}")
+        logger.error(f"Auto-conversión falló: {e}", exc_info=True)
 
 
 # ── Arranque ─────────────────────────────────────────────────────────────────

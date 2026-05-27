@@ -26,7 +26,7 @@ import numpy as np
 from fastapi import APIRouter, Query, HTTPException
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from config import get_data_dir, get_config
+from config import get_config
 
 logger = logging.getLogger("insumos")
 router = APIRouter()
@@ -37,10 +37,6 @@ _ROOT = Path(__file__).parent.parent.parent
 # ═══════════════════════════════════════════════════════════════════════════════
 # UTILIDADES BASE
 # ═══════════════════════════════════════════════════════════════════════════════
-
-def _base_dir() -> Path:
-    return get_data_dir()
-
 
 def _parse_num(s) -> Optional[float]:
     try:
@@ -77,10 +73,34 @@ def _get_infovalmer_base() -> Path:
 
 
 def _infovalmer_dir(fecha: str) -> Path:
+    """Carpeta cruda del día: infovalmer_base/FECHA/"""
     return _get_infovalmer_base() / fecha
 
 
+def _pkl_dir(fecha: str) -> Path:
+    """Cache PKL: infovalmer_base/FECHA/pkl/"""
+    d = _infovalmer_dir(fecha) / "pkl"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _excel_dir(fecha: str) -> Path:
+    """Excel exportados: infovalmer_base/FECHA/excel/"""
+    d = _infovalmer_dir(fecha) / "excel"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _cache_path(fecha: str, proveedor: str) -> Path:
+    return _pkl_dir(fecha) / f"{proveedor}_{fecha}.pkl"
+
+
+def _excel_path(fecha: str, proveedor: str) -> Path:
+    return _excel_dir(fecha) / f"{proveedor}_{fecha}.xlsx"
+
+
 def _dir_tiene_insumos(d: Path, fecha: str) -> bool:
+    """Verifica si la carpeta cruda del día tiene al menos un archivo fuente."""
     try:
         sf = datetime.strptime(fecha, "%Y%m%d").strftime("%m%d%y")
     except ValueError:
@@ -92,33 +112,23 @@ def _dir_tiene_insumos(d: Path, fecha: str) -> bool:
         f"titulos_participativos_valoracion_{fecha}.txt",
         f"monedas_matriz_info_{fecha}.csv",
     )
-    return any((d / nombre).is_file() for nombre in nombres)
-
-
-def _dirs(fecha: str) -> List[Path]:
-    base = _base_dir()
-    infovalmer_base = _get_infovalmer_base()
-    dirs = [base / fecha, infovalmer_base / fecha, base]
-    seen: set = set()
-    unique = []
-    for d in dirs:
-        k = str(d).lower()
-        if k not in seen:
-            seen.add(k)
-            unique.append(d)
-    return unique
+    # También acepta si ya tiene PKLs convertidos
+    pkl_dir = d / "pkl"
+    tiene_pkl = pkl_dir.exists() and any(pkl_dir.glob("*.pkl"))
+    return any((d / nombre).is_file() for nombre in nombres) or tiene_pkl
 
 
 def _find_file(fecha: str, patterns: List[str]) -> Optional[Path]:
-    for d in _dirs(fecha):
-        if not d.exists():
+    """Busca archivo fuente solo en la carpeta cruda del día."""
+    d = _infovalmer_dir(fecha)
+    if not d.exists():
+        return None
+    for f in sorted(d.iterdir()):
+        if not f.is_file():
             continue
-        for f in sorted(d.iterdir()):
-            if not f.is_file():
-                continue
-            for pat in patterns:
-                if re.search(pat, f.name, re.IGNORECASE):
-                    return f
+        for pat in patterns:
+            if re.search(pat, f.name, re.IGNORECASE):
+                return f
     return None
 
 
@@ -140,25 +150,17 @@ def _read_csv_auto(path: Path, **kwargs) -> pd.DataFrame:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def _fechas_disponibles() -> List[str]:
+    """
+    Devuelve todas las fechas con archivos en Infovalmer (últimos ~90 días).
+    Busca SOLO en infovalmer_base/FECHA/ — ya no hay carpeta data_dir separada.
+    """
     fechas: set = set()
-
-    # 1) carpetas YYYYMMDD en data_dir local
-    base = _base_dir()
-    if base.exists():
-        for d in base.iterdir():
-            if d.is_dir() and _fecha_valida(d.name) and _dir_tiene_insumos(d, d.name):
-                fechas.add(d.name)
-
-    # 2) carpetas YYYYMMDD en Infovalmer J: (últimos 75 días hábiles aprox.)
     infovalmer_base = _get_infovalmer_base()
     if infovalmer_base.exists():
-        hoy = datetime.today()
-        for i in range(-7, 75):
-            fecha = (hoy - timedelta(days=i)).strftime("%Y%m%d")
-            d = infovalmer_base / fecha
-            if d.is_dir() and _dir_tiene_insumos(d, fecha):
-                fechas.add(fecha)
-
+        # Escanear todas las subcarpetas YYYYMMDD
+        for d in infovalmer_base.iterdir():
+            if d.is_dir() and _fecha_valida(d.name) and _dir_tiene_insumos(d, d.name):
+                fechas.add(d.name)
     return sorted(fechas)
 
 
@@ -169,48 +171,36 @@ def _fechas_disponibles() -> List[str]:
 CACHE_PROVEEDORES = ("SP", "SW", "TP", "SV", "MX", "MX_RV", "NOTAS", "SB", "MONEDAS")
 
 
-def _cache_dir(fecha: str) -> Path:
-    return _base_dir() / fecha / "cache_insumos"
-
-
-def _cache_path(fecha: str, proveedor: str, ext: str = "pkl") -> Path:
-    return _cache_dir(fecha) / f"{proveedor}_{fecha}.{ext}"
-
-
 def _leer_cache(fecha: str, proveedor: str) -> Optional[pd.DataFrame]:
-    path = _cache_path(fecha, proveedor, "pkl")
+    path = _cache_path(fecha, proveedor)
     if not path.exists():
         return None
     try:
         return pd.read_pickle(path)
     except Exception as e:
-        logger.warning(f"Cache corrupto {path}: {e}")
+        logger.warning(f"PKL corrupto {path}: {e}")
+        path.unlink(missing_ok=True)
         return None
 
 
 def _guardar_cache(fecha: str, proveedor: str, df: pd.DataFrame,
-                   export_excel: bool = False) -> Dict[str, Any]:
-    """Guarda PKL en cache_insumos. Si export_excel=True guarda XLSX en infovalmer."""
-    cdir = _cache_dir(fecha)
-    cdir.mkdir(parents=True, exist_ok=True)
-    pkl = _cache_path(fecha, proveedor, "pkl")
+                   export_excel: bool = True) -> Dict[str, Any]:
+    """
+    Guarda PKL en infovalmer/FECHA/pkl/
+    Si export_excel=True, guarda XLSX en infovalmer/FECHA/excel/
+    """
+    pkl = _cache_path(fecha, proveedor)
     df.to_pickle(pkl)
 
     xlsx_path = None
     excel_ok  = False
     if export_excel and not df.empty:
-        # Excel va a la carpeta de infovalmer del día (no en cache_insumos)
-        destino = _infovalmer_dir(fecha)
-        if destino.exists():
-            xlsx_path = destino / f"{proveedor}_{fecha}.xlsx"
-        else:
-            # Fallback: dentro de cache_insumos
-            xlsx_path = cdir / f"{proveedor}_{fecha}.xlsx"
+        xlsx_path = _excel_path(fecha, proveedor)
         try:
             df.to_excel(xlsx_path, index=False)
             excel_ok = True
         except Exception as e:
-            logger.warning(f"No se pudo exportar Excel {xlsx_path}: {e}")
+            logger.warning(f"Excel falló {xlsx_path}: {e}")
 
     return {
         "proveedor": proveedor,
@@ -222,32 +212,34 @@ def _guardar_cache(fecha: str, proveedor: str, df: pd.DataFrame,
 
 
 def _cache_status(fecha: str) -> Dict[str, Any]:
+    """Estado completo de PKL + Excel para la fecha dada."""
     detalle = {}
-    total_ok = 0
-    infovalmer_dia = _infovalmer_dir(fecha)
+    total_pkl = 0
+    total_xlsx = 0
+    dia = _infovalmer_dir(fecha)
     for proveedor in CACHE_PROVEEDORES:
-        pkl  = _cache_path(fecha, proveedor, "pkl")
-        # Buscar Excel en infovalmer primero, luego en cache
-        xlsx_inf = infovalmer_dia / f"{proveedor}_{fecha}.xlsx"
-        xlsx_cac = _cache_path(fecha, proveedor, "xlsx")
-        xlsx_exists = xlsx_inf.exists() or xlsx_cac.exists()
-        xlsx_path   = str(xlsx_inf) if xlsx_inf.exists() else str(xlsx_cac)
-        ok = pkl.exists()
-        total_ok += int(ok)
+        pkl  = _cache_path(fecha, proveedor)
+        xlsx = _excel_path(fecha, proveedor)
+        ok_pkl  = pkl.exists()
+        ok_xlsx = xlsx.exists()
+        total_pkl  += int(ok_pkl)
+        total_xlsx += int(ok_xlsx)
         detalle[proveedor] = {
-            "cache":  ok,
-            "excel":  xlsx_exists,
-            "pkl":    str(pkl),
-            "xlsx":   xlsx_path,
+            "pkl":        ok_pkl,
+            "xlsx":       ok_xlsx,
+            "pkl_path":   str(pkl),
+            "xlsx_path":  str(xlsx),
         }
     return {
-        "fecha":       fecha,
-        "cache_dir":   str(_cache_dir(fecha)),
-        "infovalmer":  str(infovalmer_dia),
-        "total":       len(CACHE_PROVEEDORES),
-        "convertidos": total_ok,
-        "completo":    total_ok == len(CACHE_PROVEEDORES),
-        "proveedores": detalle,
+        "fecha":        fecha,
+        "infovalmer":   str(dia),
+        "pkl_dir":      str(dia / "pkl"),
+        "excel_dir":    str(dia / "excel"),
+        "total":        len(CACHE_PROVEEDORES),
+        "pkl_ok":       total_pkl,
+        "xlsx_ok":      total_xlsx,
+        "completo":     total_pkl == len(CACHE_PROVEEDORES),
+        "proveedores":  detalle,
     }
 
 
@@ -654,50 +646,52 @@ def estado_cache(fecha: str):
 @router.post("/convertir/{fecha}")
 def convertir_insumos(
     fecha: str,
-    force: bool = Query(False, description="Regenerar aunque ya exista cache"),
-    excel: bool = Query(True, description="Exportar Excel a carpeta infovalmer del día"),
+    force: bool = Query(False, description="Reconvertir aunque el PKL ya exista"),
 ):
     """
-    Convierte archivos crudos de Infovalmer → PKL (cache rápido) + XLSX en infovalmer.
-    - Si el PKL ya existe y force=False, lo omite y reporta 'omitido'.
-    - El XLSX se guarda en la misma carpeta infovalmer del día (ej. J:/…/20260526/).
-    - Usa ThreadPoolExecutor para convertir en paralelo.
+    Convierte TODOS los archivos crudos de Infovalmer para la fecha dada.
+    - PKL  → infovalmer/FECHA/pkl/PROVEEDOR_FECHA.pkl
+    - XLSX → infovalmer/FECHA/excel/PROVEEDOR_FECHA.xlsx
+    - Si el PKL ya existe y force=False, lo omite (no reconvierte).
+    - Paralelo con 4 hilos.
     """
-    raw_loaders = {
+    loaders = {
         "SP": cargar_sp, "SW": cargar_sw, "TP": cargar_tp, "SV": cargar_sv,
         "MX": cargar_mx, "MX_RV": cargar_mx_rv, "NOTAS": cargar_notas,
         "SB": cargar_sb, "MONEDAS": cargar_monedas,
     }
 
-    def _convertir_uno(item):
+    def _uno(item):
         proveedor, loader = item
-        pkl = _cache_path(fecha, proveedor, "pkl")
-        if pkl.exists() and not force:
+        pkl = _cache_path(fecha, proveedor)
+        xlsx = _excel_path(fecha, proveedor)
+        if pkl.exists() and xlsx.exists() and not force:
             cached = _leer_cache(fecha, proveedor)
-            # ¿Ya tiene Excel en infovalmer?
-            infovalmer_dia = _infovalmer_dir(fecha)
-            xlsx_inf = infovalmer_dia / f"{proveedor}_{fecha}.xlsx"
             return {
                 "proveedor": proveedor,
                 "filas":     int(len(cached)) if cached is not None else 0,
                 "cache_ok":  True,
                 "omitido":   True,
-                "excel":     str(xlsx_inf) if xlsx_inf.exists() else None,
+                "pkl":       str(pkl),
+                "xlsx":      str(xlsx),
             }
         try:
             df = loader(fecha, use_cache=False)
-            return _guardar_cache(fecha, proveedor, df, export_excel=excel)
+            if df.empty:
+                return {"proveedor": proveedor, "filas": 0, "cache_ok": False,
+                        "error": "archivo fuente no encontrado o vacío"}
+            return _guardar_cache(fecha, proveedor, df, export_excel=True)
         except Exception as e:
             logger.exception(f"Error convirtiendo {proveedor} {fecha}")
             return {"proveedor": proveedor, "filas": 0, "cache_ok": False, "error": str(e)}
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
-        resultados = list(pool.map(_convertir_uno, raw_loaders.items()))
+        resultados = list(pool.map(_uno, loaders.items()))
 
     return {
-        "ok":        all(r.get("cache_ok") for r in resultados),
-        "fecha":     fecha,
-        "status":    _cache_status(fecha),
+        "ok":         all(r.get("cache_ok") for r in resultados),
+        "fecha":      fecha,
+        "status":     _cache_status(fecha),
         "resultados": resultados,
     }
 

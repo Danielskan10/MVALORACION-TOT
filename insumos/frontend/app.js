@@ -566,31 +566,36 @@ function cerrarHistorial() { $('slide-hist').classList.remove('open'); }
 async function cargarConfig() {
   try {
     const c = await J('/api/config');
-    $('cfg-data-dir').value          = c.data_dir||'';
-    $('cfg-infovalmer').value        = c.infovalmer_dir||'';
-    $('cfg-umbral').value            = c.umbral_variacion_pct??3;
-    $('cfg-host').value              = c.host||'0.0.0.0';
-    $('cfg-port').value              = c.port||8001;
-  } catch(e) { console.warn('config',e); }
+    $('cfg-infovalmer').value = c.infovalmer_dir||'';
+    $('cfg-umbral').value     = c.umbral_variacion_pct??3;
+    $('cfg-host').value       = c.host||'0.0.0.0';
+    $('cfg-port').value       = c.port||8001;
+    // Mostrar estado de infovalmer
+    const exists = c.infovalmer_dir_exists;
+    const msg = $('cfg-msg');
+    if (msg) {
+      msg.style.color = exists ? 'var(--sk-green)' : 'var(--sk-red)';
+      msg.textContent = exists ? '✓ Carpeta Infovalmer accesible' : '✗ Carpeta Infovalmer no encontrada';
+    }
+  } catch(e) { console.warn('config', e); }
 }
 
 async function guardarConfig() {
   const msg = $('cfg-msg');
-  msg.textContent='Guardando...';
+  msg.textContent = 'Guardando...'; msg.style.color = '';
   const body = {
-    data_dir:           $('cfg-data-dir').value,
-    infovalmer_dir:     $('cfg-infovalmer').value,
+    infovalmer_dir:       $('cfg-infovalmer').value,
     umbral_variacion_pct: parseFloat($('cfg-umbral').value)||3,
-    host:               $('cfg-host').value,
-    port:               parseInt($('cfg-port').value)||8001,
+    host:                 $('cfg-host').value,
+    port:                 parseInt($('cfg-port').value)||8001,
   };
   try {
     const r = await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     const j = await r.json();
-    msg.style.color = j.ok?'var(--sk-green)':'var(--sk-red)';
-    msg.textContent = j.ok?'Guardado correctamente':'Error al guardar';
+    msg.style.color = j.ok ? 'var(--sk-green)' : 'var(--sk-red)';
+    msg.textContent = j.ok ? 'Guardado correctamente' : 'Error al guardar';
   } catch(e) { msg.style.color='var(--sk-red)'; msg.textContent='Error: '+e.message; }
-  setTimeout(()=>{ msg.textContent=''; msg.style.color=''; },3000);
+  setTimeout(()=>{ msg.textContent=''; msg.style.color=''; }, 3000);
 }
 
 // ── CONVERSOR ─────────────────────────────────────────────
@@ -607,32 +612,42 @@ async function cargarStatusCache() {
 }
 
 function _renderCacheTabla(s, wrap) {
-  const provs = Object.entries(s.proveedores||{});
-  const totalOk = s.convertidos||0;
-  const total   = s.total||provs.length;
+  const provs    = Object.entries(s.proveedores||{});
+  const pklOk    = s.pkl_ok   ?? s.convertidos ?? 0;
+  const xlsxOk   = s.xlsx_ok  ?? 0;
+  const total    = s.total    || provs.length;
   const completo = s.completo;
+  const allXlsx  = xlsxOk === total;
 
   wrap.innerHTML = `
-    <div style="margin-bottom:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+    <div style="margin-bottom:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
       <span style="font-size:.75rem;font-weight:800;color:${completo?'var(--sk-green)':'var(--sk-orange)'};">
-        ${completo ? '✓ Cache completo' : '⚠ Cache incompleto'} — ${totalOk}/${total} proveedores
+        PKL: ${pklOk}/${total} ${completo?'✓':'⚠'}
       </span>
-      <span style="font-size:.65rem;color:var(--muted2);">Infovalmer: ${esc(s.infovalmer||'')}</span>
+      <span style="font-size:.75rem;font-weight:800;color:${allXlsx?'var(--sk-green)':'var(--sk-orange)'};">
+        Excel: ${xlsxOk}/${total} ${allXlsx?'✓':'⚠'}
+      </span>
+      <span style="font-size:.63rem;color:var(--muted2);">
+        pkl → ${esc(s.pkl_dir||s.infovalmer||'')}
+      </span>
+      <span style="font-size:.63rem;color:var(--muted2);">
+        xlsx → ${esc(s.excel_dir||'')}
+      </span>
     </div>
     <div class="twrap">
     <table>
       <thead><tr>
         <th>Proveedor</th>
-        <th>PKL (cache)</th>
-        <th>Excel (infovalmer)</th>
+        <th>PKL (cache rápido)</th>
+        <th>Excel (infovalmer/FECHA/excel/)</th>
       </tr></thead>
       <tbody>${provs.map(([prov, v])=>`
         <tr>
           <td><strong>${esc(prov)}</strong></td>
-          <td>${v.cache
+          <td>${v.pkl
             ? `<span style="color:var(--sk-green);font-weight:700;">✓ ok</span>`
             : `<span style="color:var(--sk-red);">✗ falta</span>`}</td>
-          <td>${v.excel
+          <td>${v.xlsx
             ? `<span style="color:var(--sk-green);font-weight:700;">✓ ok</span>`
             : `<span style="color:var(--muted2);">— pendiente</span>`}</td>
         </tr>`).join('')}
@@ -686,7 +701,7 @@ async function convertirFecha() {
       </table>
       </div>
       <div style="margin-top:8px;font-size:.65rem;color:var(--muted2);">
-        Excel guardado en: ${esc(d.status?.infovalmer||'carpeta infovalmer del día')}
+        Excel → ${esc(d.status?.excel_dir||d.status?.infovalmer||'infovalmer/FECHA/excel/')}
       </div>`;
     // Recargar datos con la nueva fecha
     S.tabData = {}; S.alertas = []; S.mdData = null; _curvaData = null;
