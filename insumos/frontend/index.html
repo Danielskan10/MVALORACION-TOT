@@ -28,12 +28,18 @@
 <!-- ═══════════════════════════ TOOLBAR ═══════════════════════ -->
 <div class="toolbar">
   <div class="tb-group">
-    <span class="tb-label">Fecha</span>
+    <span class="tb-label">Fecha hoy</span>
     <select id="sel-fecha" class="tb-sel" onchange="cargarTodo()"></select>
   </div>
   <div class="tb-group">
+    <span class="tb-label">Comparar con</span>
+    <select id="sel-fecha-ant" class="tb-sel" onchange="cargarAlertasDia()" style="min-width:130px;">
+      <option value="">-- Auto (anterior) --</option>
+    </select>
+  </div>
+  <div class="tb-group">
     <span class="tb-label">Umbral %</span>
-    <input id="inp-umbral" class="tb-inp" type="number" value="3" min="0.1" step="0.5" style="width:72px;" onchange="cargarTodo()"/>
+    <input id="inp-umbral" class="tb-inp" type="number" value="3" min="0.1" step="0.5" style="width:72px;" onchange="cargarAlertasDia()"/>
   </div>
   <button class="btn btn-ghost btn-sm" onclick="cargarTodo()">Actualizar</button>
   <div style="margin-left:auto;display:flex;align-items:flex-end;gap:6px;">
@@ -173,22 +179,29 @@
 
     <!-- FILTROS + TABLA -->
     <div class="fb">
-      <input class="tb-inp" id="fil-busq-alertas" type="text" placeholder="Buscar ISIN..." oninput="renderAlertas()" style="width:200px;"/>
+      <input class="tb-inp" id="fil-busq-alertas" type="text" placeholder="Buscar ISIN / NEMO..." oninput="renderAlertas()" style="width:210px;"/>
       <select class="tb-sel" id="fil-fuente-alertas" onchange="renderAlertas()">
         <option value="">Todas las fuentes</option>
         <option value="SP">SP</option>
         <option value="SW">SW</option>
         <option value="SV">SV</option>
         <option value="MX">MX</option>
+        <option value="MX_RV">MX_RV</option>
         <option value="NOTAS">NOTAS</option>
+        <option value="TP">TP</option>
       </select>
       <select class="tb-sel" id="fil-sev-alertas" onchange="renderAlertas()">
         <option value="">Toda severidad</option>
         <option value="CRITICA">Critica</option>
         <option value="ALTA">Alta</option>
         <option value="MEDIA">Media</option>
-        <option value="BAJA">Baja</option>
       </select>
+      <label style="display:flex;align-items:center;gap:5px;font-size:.72rem;color:var(--muted);cursor:pointer;white-space:nowrap;">
+        <input type="checkbox" id="fil-solo-subida" onchange="renderAlertas()"/> Solo subida
+      </label>
+      <label style="display:flex;align-items:center;gap:5px;font-size:.72rem;color:var(--muted);cursor:pointer;white-space:nowrap;">
+        <input type="checkbox" id="fil-solo-bajada" onchange="renderAlertas()"/> Solo bajada
+      </label>
       <span id="cnt-alertas" style="font-size:.7rem;color:var(--muted);margin-left:4px;">0 filas</span>
     </div>
 

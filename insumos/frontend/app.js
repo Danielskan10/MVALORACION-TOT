@@ -66,13 +66,25 @@ function showTab(id, el) {
 
 // ── INIT ──────────────────────────────────────────────────
 async function cargarFechas() {
-  const sel = $('sel-fecha');
+  const sel    = $('sel-fecha');
+  const selAnt = $('sel-fecha-ant');
   try {
     const d = await J('/api/insumos/fechas');
     S.fechas = (d.fechas||[]).slice().reverse();
     sel.innerHTML = S.fechas.map(f=>`<option value="${f}">${f.slice(0,4)}-${f.slice(4,6)}-${f.slice(6)}</option>`).join('');
+    // Poblar selector de fecha de comparación (excluye la primera fecha activa)
+    _actualizarSelectorFechaAnt();
     if (S.fechas.length) { S.fecha = S.fechas[0]; cargarTodo(); }
   } catch(e) { sel.innerHTML='<option value="">Sin fechas</option>'; }
+}
+
+function _actualizarSelectorFechaAnt() {
+  const selAnt = $('sel-fecha-ant');
+  if (!selAnt) return;
+  // Mostrar todas las fechas excepto la activa, en orden cronológico desc
+  const otras = S.fechas.filter(f => f !== S.fecha);
+  selAnt.innerHTML = '<option value="">-- Auto (anterior) --</option>' +
+    otras.map(f=>`<option value="${f}">${f.slice(0,4)}-${f.slice(4,6)}-${f.slice(6)}</option>`).join('');
 }
 
 async function cargarTodo() {
@@ -81,6 +93,7 @@ async function cargarTodo() {
   if (!S.fecha) return;
   S.tabData = {}; S.alertas = []; S.spData = []; S.mdData = null; _curvaData = null;
   actualizarBadgesFecha();
+  _actualizarSelectorFechaAnt();
   // Sincronizar campo conversor con la fecha activa
   const convFecha = $('conv-fecha');
   if (convFecha && !convFecha.value) convFecha.value = S.fecha;
@@ -115,12 +128,25 @@ function actualizarBadgesFecha() {
 async function cargarAlertasDia() {
   const wrap = $('wrap-alertas');
   wrap.innerHTML = '<div class="empty"><span class="spinner"></span> Calculando alertas...</div>';
+  S.umbral = parseFloat($('inp-umbral').value)||3;
+  const fechaAnt = ($('sel-fecha-ant')||{}).value || '';
   try {
-    const d = await J(`/api/insumos/alertas/${S.fecha}?umbral_pct=${S.umbral}`);
+    let url = `/api/insumos/alertas/${S.fecha}?umbral_pct=${S.umbral}`;
+    if (fechaAnt) url += `&fecha_ant=${fechaAnt}`;
+    const d = await J(url);
     S.alertas = d.alertas || [];
+    S.fechaAnt = d.fecha_ant || '';
+    // Actualizar selector con las fechas disponibles que devuelve el backend
+    if (d.fechas_disponibles && d.fechas_disponibles.length) {
+      S.fechas = d.fechas_disponibles.slice().reverse();
+      _actualizarSelectorFechaAnt();
+      // Restaurar selección
+      if (fechaAnt) $('sel-fecha-ant').value = fechaAnt;
+    }
     $('kpi-alertas').textContent   = S.alertas.length;
     $('kpi-criticas').textContent  = d.criticas||0;
-    $('kpi-fecha-ant').textContent = d.fecha_ant ? `${d.fecha_ant.slice(0,4)}-${d.fecha_ant.slice(4,6)}-${d.fecha_ant.slice(6)}` : '—';
+    $('kpi-fecha-ant').textContent = d.fecha_ant
+      ? `${d.fecha_ant.slice(0,4)}-${d.fecha_ant.slice(4,6)}-${d.fecha_ant.slice(6)}` : '—';
     renderBannerAlerta(d);
     renderAlertas();
     renderTopVariaciones();
@@ -130,6 +156,7 @@ async function cargarAlertasDia() {
   } catch(e) {
     wrap.innerHTML = `<div class="empty">Sin fecha anterior disponible para comparar.</div>`;
     S.alertas = [];
+    S.fechaAnt = '';
     renderTopVariaciones();
     renderRallyCards();
     renderHeatmap();
@@ -154,39 +181,86 @@ function renderBannerAlerta(d) {
 // ── TABLA ALERTAS ─────────────────────────────────────────
 let _alertSort = {col:'VAR_PCT', dir:-1};
 
+// Detectar si las alertas usan precio grande (>100) para decidir decimales
+function _decAlertas(rows) {
+  const ps = rows.map(r=>r.PRECIO_HOY).filter(v=>v!=null&&!isNaN(v));
+  return ps.length && ps.some(v=>Math.abs(v)>50) ? 2 : 4;
+}
+
 function renderAlertas() {
-  const busq  = ($('fil-busq-alertas')||{}).value||'';
-  const fuente= ($('fil-fuente-alertas')||{}).value||'';
-  const sev   = ($('fil-sev-alertas')||{}).value||'';
+  const busq     = ($('fil-busq-alertas')||{}).value||'';
+  const fuente   = ($('fil-fuente-alertas')||{}).value||'';
+  const sev      = ($('fil-sev-alertas')||{}).value||'';
+  const soloSube = ($('fil-solo-subida')||{}).checked||false;
+  const soloBaja = ($('fil-solo-bajada')||{}).checked||false;
   let rows = [...S.alertas];
-  if (busq)   rows = rows.filter(r=>esc(r.ISIN).toUpperCase().includes(busq.toUpperCase()));
-  if (fuente) rows = rows.filter(r=>r.FUENTE===fuente);
-  if (sev)    rows = rows.filter(r=>r.SEVERIDAD===sev);
 
-  rows.sort((a,b) => _alertSort.dir * (Math.abs(b[_alertSort.col]||0) - Math.abs(a[_alertSort.col]||0)));
+  // Filtros
+  if (busq)     rows = rows.filter(r=>{
+    const haystack = [r.ISIN,r.ID,r.NEMO,r.Descripcion,r.FUENTE].map(v=>String(v||'').toUpperCase()).join(' ');
+    return haystack.includes(busq.toUpperCase());
+  });
+  if (fuente)   rows = rows.filter(r=>r.FUENTE===fuente);
+  if (sev)      rows = rows.filter(r=>r.SEVERIDAD===sev);
+  if (soloSube) rows = rows.filter(r=>(r.VAR_PCT||0)>0);
+  if (soloBaja) rows = rows.filter(r=>(r.VAR_PCT||0)<0);
 
-  $('cnt-alertas').textContent = rows.length;
+  // Ordenar
+  const numCols = ['VAR_PCT','VAR_ABS','PRECIO_HOY','PRECIO_ANT'];
+  rows.sort((a,b)=>{
+    const av = numCols.includes(_alertSort.col) ? Math.abs(a[_alertSort.col]||0) : String(a[_alertSort.col]||'');
+    const bv = numCols.includes(_alertSort.col) ? Math.abs(b[_alertSort.col]||0) : String(b[_alertSort.col]||'');
+    if (typeof av==='number') return _alertSort.dir*(bv-av);
+    return _alertSort.dir*(av<bv?-1:av>bv?1:0);
+  });
+
+  $('cnt-alertas').textContent = rows.length+' filas';
   const wrap = $('wrap-alertas');
   if (!rows.length) { wrap.innerHTML='<div class="empty">Sin alertas para el filtro seleccionado.</div>'; return; }
 
+  const dec = _decAlertas(rows);
+  const thCls = col => _alertSort.col===col ? (_alertSort.dir>0?'th-asc':'th-desc') : '';
+  const fa = S.fechaAnt || '—';
+
   wrap.innerHTML = `<table>
     <thead><tr>
-      <th onclick="sortAlertas('SEVERIDAD')">SEV</th>
-      <th onclick="sortAlertas('ISIN')">ISIN / ID</th>
-      <th onclick="sortAlertas('FUENTE')">Fuente</th>
-      <th onclick="sortAlertas('PRECIO_HOY')">Precio hoy</th>
-      <th onclick="sortAlertas('PRECIO_ANT')">Precio ant.</th>
-      <th onclick="sortAlertas('VAR_PCT')" class="${_alertSort.col==='VAR_PCT'?(_alertSort.dir>0?'asc':'desc'):''}">Var %</th>
+      <th onclick="sortAlertas('SEVERIDAD')" class="${thCls('SEVERIDAD')}">SEV</th>
+      <th onclick="sortAlertas('FUENTE')" class="${thCls('FUENTE')}">Fuente</th>
+      <th onclick="sortAlertas('ID')" class="${thCls('ID')}">ISIN / ID</th>
+      <th onclick="sortAlertas('NEMO')" class="${thCls('NEMO')}">NEMO</th>
+      <th style="color:var(--muted);font-weight:400;font-size:.6rem;">Info</th>
+      <th onclick="sortAlertas('PRECIO_HOY')" class="${thCls('PRECIO_HOY')}" title="${S.fecha}">P. Hoy</th>
+      <th onclick="sortAlertas('PRECIO_ANT')" class="${thCls('PRECIO_ANT')}" title="${fa}">P. ${fa.slice(0,4)?fa.slice(4,6)+'/'+fa.slice(6):'Ant.'}</th>
+      <th onclick="sortAlertas('VAR_ABS')" class="${thCls('VAR_ABS')}">Var $</th>
+      <th onclick="sortAlertas('VAR_PCT')" class="${thCls('VAR_PCT')}">Var %</th>
     </tr></thead>
-    <tbody>${rows.map(r=>`
-      <tr class="${r.SEVERIDAD==='CRITICA'?'rc':r.SEVERIDAD==='ALTA'?'ra':''}" onclick="abrirHistorial('${esc(r.ISIN)}','${r.FUENTE}')">
-        <td><span class="sev ${r.SEVERIDAD==='CRITICA'?'sC':r.SEVERIDAD==='ALTA'?'sA':r.SEVERIDAD==='MEDIA'?'sM':'sB'}">${r.SEVERIDAD}</span></td>
-        <td><strong>${esc(r.ISIN)}</strong></td>
-        <td><span style="font-size:.6rem;background:var(--surf2);padding:.08rem .3rem;border-radius:3px;">${esc(r.FUENTE)}</span></td>
-        <td>${fmtP(r.PRECIO_HOY,6)}</td>
-        <td>${fmtP(r.PRECIO_ANT,6)}</td>
-        <td><span class="vp ${clsPct(r.VAR_PCT)}">${fmtPct(r.VAR_PCT)}</span></td>
-      </tr>`).join('')}
+    <tbody>${rows.map(r=>{
+      const sevCls = r.SEVERIDAD==='CRITICA'?'sC':r.SEVERIDAD==='ALTA'?'sA':'sM';
+      const rowCls = r.SEVERIDAD==='CRITICA'?'rc':r.SEVERIDAD==='ALTA'?'ra':'';
+      // Info extra del proveedor
+      const infoParts = [];
+      if (r.Tipo_Tasa)     infoParts.push(r.Tipo_Tasa);
+      if (r.Tipo)          infoParts.push(r.Tipo);
+      if (r.Moneda)        infoParts.push(r.Moneda);
+      if (r.Plazo)         infoParts.push(r.Plazo+'d');
+      if (r.Vcto)          infoParts.push('Vcto:'+r.Vcto);
+      if (r.Tipo_Registro) infoParts.push(r.Tipo_Registro);
+      const infoStr = infoParts.slice(0,3).join(' · ');
+      const desc = r.Descripcion || r.Emisor || '';
+      const nemo = r.NEMO || r.Codigo || '';
+      const id   = r.ID || r.ISIN || '';
+      return `<tr class="${rowCls}" onclick="abrirHistorial('${esc(id)}','${r.FUENTE}')">
+        <td><span class="sev ${sevCls}">${r.SEVERIDAD}</span></td>
+        <td><span class="src-badge src-${r.FUENTE}">${esc(r.FUENTE)}</span></td>
+        <td><strong class="isin-cell" title="${esc(desc)}">${esc(id)}</strong></td>
+        <td class="nemo-cell">${esc(nemo)||'—'}</td>
+        <td style="font-size:.6rem;color:var(--muted2);">${esc(infoStr)||'—'}</td>
+        <td class="num-cell"><strong>${fmtP(r.PRECIO_HOY,dec)}</strong></td>
+        <td class="num-cell muted">${fmtP(r.PRECIO_ANT,dec)}</td>
+        <td class="num-cell"><span class="vp ${clsPct(r.VAR_ABS)}">${r.VAR_ABS!=null?(r.VAR_ABS>=0?'+':'')+fmtP(r.VAR_ABS,dec):'—'}</span></td>
+        <td class="num-cell"><span class="vp ${clsPct(r.VAR_PCT)}">${fmtPct(r.VAR_PCT)}</span></td>
+      </tr>`;
+    }).join('')}
     </tbody></table>`;
 }
 
@@ -203,13 +277,23 @@ function renderTopVariaciones() {
 
   function filas(arr, cls) {
     if (!arr.length) return '<div class="empty" style="padding:1rem;">Sin datos</div>';
-    return arr.map((r,i)=>`
-      <div class="top-row" onclick="abrirHistorial('${esc(r.ISIN)}','${r.FUENTE}')">
+    return arr.map((r,i)=>{
+      const id   = r.NEMO || r.ID || r.ISIN || '—';
+      const sub  = r.NEMO ? (r.ID||r.ISIN||'') : '';
+      const dec  = Math.abs(r.PRECIO_HOY||0)>50 ? 2 : 4;
+      return `<div class="top-row" onclick="abrirHistorial('${esc(r.ID||r.ISIN)}','${r.FUENTE}')">
         <span class="top-rank">${i+1}</span>
-        <span class="top-id">${esc(r.ISIN)}</span>
+        <div style="flex:1;min-width:0;">
+          <div class="top-id">${esc(id)}</div>
+          ${sub?`<div style="font-size:.58rem;color:var(--muted2);overflow:hidden;text-overflow:ellipsis;">${esc(sub)}</div>`:''}
+        </div>
         <span class="top-src">${esc(r.FUENTE)}</span>
-        <span class="vp ${cls}">${fmtPct(r.VAR_PCT)}</span>
-      </div>`).join('');
+        <div style="text-align:right;">
+          <div class="vp ${cls}">${fmtPct(r.VAR_PCT)}</div>
+          <div style="font-size:.58rem;color:var(--muted2);">${fmtP(r.PRECIO_ANT,dec)} &rarr; ${fmtP(r.PRECIO_HOY,dec)}</div>
+        </div>
+      </div>`;
+    }).join('');
   }
 
   $('top-sube').innerHTML = filas(sube,'vU');
@@ -220,21 +304,27 @@ function renderTopVariaciones() {
 function renderRallyCards() {
   const top = [...S.alertas]
     .sort((a,b)=>Math.abs(b.VAR_PCT)-Math.abs(a.VAR_PCT))
-    .slice(0,10);
+    .slice(0,12);
   const wrap = $('rally-wrap');
   if (!top.length) { wrap.innerHTML='<div class="empty">Sin alertas</div>'; return; }
 
-  const fuentes = ['SP','SW','SV','MX','NOTAS','TP'];
-  const srcColor = {SP:'#0A84FF',SW:'#BF5AF2',SV:'#FF9500',MX:'#00A65A',NOTAS:'#FFD60A',TP:'#FF3B30'};
+  const srcColor = {SP:'#0A84FF',SW:'#BF5AF2',SV:'#FF9500',MX:'#00A65A',MX_RV:'#00C96E',NOTAS:'#FFD60A',TP:'#FF3B30'};
 
   wrap.innerHTML = top.map(r => {
-    const up = r.VAR_PCT > 0;
+    const up  = r.VAR_PCT > 0;
     const col = srcColor[r.FUENTE]||'#8E8E93';
-    return `<div class="rally-card" style="--rc:${col};" onclick="abrirHistorial('${esc(r.ISIN)}','${r.FUENTE}')">
+    const id  = r.NEMO || r.ID || r.ISIN || '—';
+    const sub = r.NEMO ? (r.ID||r.ISIN||'') : '';
+    const dec = Math.abs(r.PRECIO_HOY||0)>50 ? 2 : 4;
+    const infoTag = [r.Tipo_Tasa, r.Moneda, r.Vcto].filter(Boolean).slice(0,2).join(' · ');
+    return `<div class="rally-card" style="--rc:${col};" onclick="abrirHistorial('${esc(r.ID||r.ISIN)}','${r.FUENTE}')">
       <div class="rc-src">${esc(r.FUENTE)}</div>
-      <div class="rc-id">${esc(r.ISIN)}</div>
+      <div class="rc-id">${esc(id)}</div>
+      ${sub?`<div style="font-size:.55rem;color:rgba(255,255,255,.5);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(sub)}</div>`:''}
+      ${infoTag?`<div style="font-size:.52rem;color:rgba(255,255,255,.45);margin-top:1px;">${esc(infoTag)}</div>`:''}
       <div class="rc-pct ${up?'rc-up':'rc-dn'}">${fmtPct(r.VAR_PCT)}</div>
-      <div class="rc-det">${fmtP(r.PRECIO_ANT,4)} → ${fmtP(r.PRECIO_HOY,4)}</div>
+      <div class="rc-det">${fmtP(r.PRECIO_ANT,dec)} &rarr; ${fmtP(r.PRECIO_HOY,dec)}</div>
+      ${r.VAR_ABS!=null?`<div style="font-size:.55rem;color:rgba(255,255,255,.5);margin-top:2px;">${up?'+':''}${fmtP(r.VAR_ABS,dec)} abs.</div>`:''}
     </div>`;
   }).join('');
 }

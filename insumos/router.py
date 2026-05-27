@@ -64,31 +64,76 @@ def _sufijo_fecha(fecha_str: str) -> str:
 # INFOVALMER J: DRIVE
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def _get_infovalmer_base() -> Path:
+def _get_bases() -> List[Path]:
+    """
+    Devuelve las carpetas raíz donde buscar fechas, en orden de prioridad:
+      1. infovalmer_dir (configurado o default J:)
+      2. data_dir legacy (si existe): ruta del módulo/../data  o data_dir en config
+    Filtra las que no existen.
+    """
     cfg = get_config()
-    base = Path(cfg.get("infovalmer_dir", ""))
-    if not base or not base.exists():
-        base = Path(r"J:\VALORACION\VALORACION_ESPECIAL\Bolsa\INFOVALMER")
-    return base
+    candidates = []
+    # infovalmer configurado
+    inf = cfg.get("infovalmer_dir", "")
+    if inf:
+        candidates.append(Path(inf))
+    # default J: drive
+    candidates.append(Path(r"J:\VALORACION\VALORACION_ESPECIAL\Bolsa\INFOVALMER"))
+    # data_dir legacy junto al repo
+    module_dir = Path(__file__).parent
+    candidates.append(module_dir.parent / "data")
+    candidates.append(module_dir / "data")
+    # devolver solo existentes, sin duplicados
+    seen, result = set(), []
+    for p in candidates:
+        k = str(p).lower()
+        if k not in seen and p.exists():
+            seen.add(k)
+            result.append(p)
+    return result
 
 
-def _infovalmer_dir(fecha: str) -> Path:
-    """Carpeta cruda del día: infovalmer_base/FECHA/"""
-    return _get_infovalmer_base() / fecha
+def _get_infovalmer_base() -> Path:
+    """Primera base disponible (para compatibilidad)."""
+    bases = _get_bases()
+    return bases[0] if bases else Path(r"J:\VALORACION\VALORACION_ESPECIAL\Bolsa\INFOVALMER")
+
+
+def _fecha_dir(fecha: str) -> Optional[Path]:
+    """Devuelve la carpeta del día buscando en todas las bases."""
+    for base in _get_bases():
+        d = base / fecha
+        if d.exists():
+            return d
+    return None
 
 
 def _pkl_dir(fecha: str) -> Path:
-    """Cache PKL: infovalmer_base/FECHA/pkl/"""
-    d = _infovalmer_dir(fecha) / "pkl"
-    d.mkdir(parents=True, exist_ok=True)
-    return d
+    """PKL dentro de la carpeta del día (se crea si no existe)."""
+    d = _fecha_dir(fecha)
+    if d is None:
+        # fallback: crear en la primera base
+        bases = _get_bases()
+        d = bases[0] / fecha if bases else Path(fecha)
+    pkl = d / "pkl"
+    pkl.mkdir(parents=True, exist_ok=True)
+    return pkl
 
 
 def _excel_dir(fecha: str) -> Path:
-    """Excel exportados: infovalmer_base/FECHA/excel/"""
-    d = _infovalmer_dir(fecha) / "excel"
-    d.mkdir(parents=True, exist_ok=True)
-    return d
+    """Excel dentro de la carpeta del día (se crea si no existe)."""
+    d = _fecha_dir(fecha)
+    if d is None:
+        bases = _get_bases()
+        d = bases[0] / fecha if bases else Path(fecha)
+    exc = d / "excel"
+    exc.mkdir(parents=True, exist_ok=True)
+    return exc
+
+
+def _infovalmer_dir(fecha: str) -> Path:
+    """Alias de _fecha_dir para compatibilidad con main.py."""
+    return _fecha_dir(fecha) or (_get_infovalmer_base() / fecha)
 
 
 def _cache_path(fecha: str, proveedor: str) -> Path:
@@ -100,28 +145,30 @@ def _excel_path(fecha: str, proveedor: str) -> Path:
 
 
 def _dir_tiene_insumos(d: Path, fecha: str) -> bool:
-    """Verifica si la carpeta cruda del día tiene al menos un archivo fuente."""
+    """True si la carpeta tiene archivos fuente conocidos O pkls ya convertidos."""
     try:
         sf = datetime.strptime(fecha, "%Y%m%d").strftime("%m%d%y")
     except ValueError:
         return False
-    nombres = (
+    fuentes = (
         f"SP{sf}.001", f"SW{sf}.001", f"SV{sf}.001", f"SB{sf}.001",
         f"MX{sf}.txt", f"MX{sf}_RV.txt",
         f"NOTAS_ESTRUCTURADAS_{fecha}.csv",
         f"titulos_participativos_valoracion_{fecha}.txt",
         f"monedas_matriz_info_{fecha}.csv",
+        f"eurofxref{fecha}.csv",
+        f"Matriz_TC_{fecha}.csv",
     )
-    # También acepta si ya tiene PKLs convertidos
-    pkl_dir = d / "pkl"
-    tiene_pkl = pkl_dir.exists() and any(pkl_dir.glob("*.pkl"))
-    return any((d / nombre).is_file() for nombre in nombres) or tiene_pkl
+    tiene_fuente = any((d / n).is_file() for n in fuentes)
+    pkl_d = d / "pkl"
+    tiene_pkl = pkl_d.is_dir() and any(pkl_d.glob("*.pkl"))
+    return tiene_fuente or tiene_pkl
 
 
 def _find_file(fecha: str, patterns: List[str]) -> Optional[Path]:
-    """Busca archivo fuente solo en la carpeta cruda del día."""
-    d = _infovalmer_dir(fecha)
-    if not d.exists():
+    """Busca archivo fuente en la carpeta del día (todas las bases)."""
+    d = _fecha_dir(fecha)
+    if d is None or not d.exists():
         return None
     for f in sorted(d.iterdir()):
         if not f.is_file():
@@ -150,15 +197,12 @@ def _read_csv_auto(path: Path, **kwargs) -> pd.DataFrame:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def _fechas_disponibles() -> List[str]:
-    """
-    Devuelve todas las fechas con archivos en Infovalmer (últimos ~90 días).
-    Busca SOLO en infovalmer_base/FECHA/ — ya no hay carpeta data_dir separada.
-    """
+    """Escanea TODAS las bases configuradas buscando subcarpetas YYYYMMDD con datos."""
     fechas: set = set()
-    infovalmer_base = _get_infovalmer_base()
-    if infovalmer_base.exists():
-        # Escanear todas las subcarpetas YYYYMMDD
-        for d in infovalmer_base.iterdir():
+    for base in _get_bases():
+        if not base.exists():
+            continue
+        for d in base.iterdir():
             if d.is_dir() and _fecha_valida(d.name) and _dir_tiene_insumos(d, d.name):
                 fechas.add(d.name)
     return sorted(fechas)
@@ -625,12 +669,22 @@ def _buscar_df(df: pd.DataFrame, q: str) -> pd.DataFrame:
 
 
 def _df_to_records(df: pd.DataFrame, limit: int = 1000) -> List[Dict]:
-    """Convierte DataFrame a lista de dicts con NaN→None de forma eficiente."""
-    return (
-        df.head(limit)
-        .where(df.head(limit).notna(), other=None)
-        .to_dict(orient="records")
-    )
+    """
+    Convierte DataFrame a lista de dicts JSON-safe.
+    Convierte NaN/inf (numérico o float mezclado en strings) → None.
+    """
+    import math
+    sub = df.head(limit).copy()
+    # Columnas numéricas: NaN -> None
+    for col in sub.select_dtypes(include=["float64", "float32", "Float64"]).columns:
+        sub[col] = sub[col].where(sub[col].notna(), other=None)
+    # Columnas string/object: float('nan') mezclado -> None
+    for col in sub.columns:
+        if sub[col].dtype.kind in ("O", "U", "S"):  # object, unicode, bytes
+            sub[col] = sub[col].apply(
+                lambda x: None if (isinstance(x, float) and not math.isfinite(x)) else x
+            )
+    return sub.to_dict(orient="records")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -904,63 +958,116 @@ def get_alertas(
     umbral_pct: float = Query(5.0),
     fecha_ant: Optional[str] = Query(None, description="Fecha anterior explícita"),
 ):
-    """Alertas de variación anormal de precio entre fecha y su anterior."""
+    """
+    Alertas de variación anormal de precio entre fecha y su anterior.
+    Incluye NEMO, metadatos del título y variación absoluta.
+    """
     fechas = _fechas_disponibles()
     if fecha_ant:
         fa = fecha_ant
     else:
         idx = fechas.index(fecha) if fecha in fechas else -1
         if idx <= 0:
-            return {"alertas": [], "total": 0, "msg": "Sin fecha anterior disponible"}
+            return {"alertas": [], "total": 0, "msg": "Sin fecha anterior disponible",
+                    "fechas_disponibles": fechas}
         fa = fechas[idx - 1]
+
+    # Columnas de metadatos que enriquecen cada alerta (según proveedor)
+    META_COLS: Dict[str, List[str]] = {
+        "SP":    ["NEMO", "Tipo_Tasa", "Vcto", "Moneda", "Plazo", "TIR"],
+        "SW":    ["NEMO", "Tipo_Registro"],
+        "SV":    ["Codigo", "Tipo", "Plazo"],
+        "MX":    ["ISIN"],      # ID ya es ISIN; agrega columna Descripcion si existe
+        "MX_RV": ["ISIN"],
+        "NOTAS": ["ISIN"],
+        "TP":    ["Codigo", "ISIN"],
+    }
 
     alertas = []
     for nombre, fn in CARGADORES.items():
-        if nombre in ("SB", "TP"):   # TP/SB no tienen precios comparables día a día
+        if nombre == "SB":          # SB no tiene precios comparables
             continue
+        meta_extra = META_COLS.get(nombre, [])
         try:
             df_h = fn(fecha)
             df_a = fn(fa)
             if df_h.empty or df_a.empty:
                 continue
-            df_h = df_h[["ID", "PRECIO"]].copy()
-            df_a = df_a[["ID", "PRECIO"]].copy()
-            df_h["ID"] = df_h["ID"].astype(str).str.strip().str.upper()
-            df_a["ID"] = df_a["ID"].astype(str).str.strip().str.upper()
-            df_h["PRECIO"] = pd.to_numeric(df_h["PRECIO"], errors="coerce")
-            df_a["PRECIO"] = pd.to_numeric(df_a["PRECIO"], errors="coerce")
 
-            merged = df_h.merge(df_a, on="ID", suffixes=("_HOY", "_ANT")).dropna()
+            # Columnas a incluir: ID, PRECIO + meta del hoy
+            cols_h = ["ID", "PRECIO"] + [c for c in meta_extra if c in df_h.columns]
+            # Aseguramos unicidad (algunos proveedores ya tienen ISIN = ID)
+            cols_h = list(dict.fromkeys(cols_h))
+
+            df_h2 = df_h[cols_h].copy()
+            df_a2 = df_a[["ID", "PRECIO"]].copy()
+
+            for df in (df_h2, df_a2):
+                df["ID"] = df["ID"].astype(str).str.strip().str.upper()
+
+            df_h2["PRECIO"] = pd.to_numeric(df_h2["PRECIO"], errors="coerce")
+            df_a2["PRECIO"] = pd.to_numeric(df_a2["PRECIO"], errors="coerce")
+
+            # Para MX/NOTAS/TP/MX_RV intentamos agregar nombre/descripción si existe
+            desc_col = next(
+                (c for c in ["Nombre", "Descripcion", "Emisor", "Descripción"]
+                 if c in df_h.columns), None
+            )
+            if desc_col and desc_col not in df_h2.columns:
+                df_h2["Descripcion"] = df_h[desc_col].values
+
+            merged = (
+                df_h2.merge(df_a2, on="ID", suffixes=("_HOY", "_ANT"))
+                .dropna(subset=["PRECIO_HOY", "PRECIO_ANT"])
+            )
             merged = merged[merged["PRECIO_ANT"] != 0]
+            merged["VAR_ABS"] = (merged["PRECIO_HOY"] - merged["PRECIO_ANT"]).round(6)
             merged["VAR_PCT"] = (
-                (merged["PRECIO_HOY"] - merged["PRECIO_ANT"])
-                / merged["PRECIO_ANT"].abs() * 100
+                merged["VAR_ABS"] / merged["PRECIO_ANT"].abs() * 100
             ).round(4)
             anorm = merged[merged["VAR_PCT"].abs() > umbral_pct]
+
             for _, r in anorm.iterrows():
-                alertas.append({
-                    "ISIN":       r["ID"],
+                sev_abs = abs(r["VAR_PCT"])
+                sev = ("CRITICA" if sev_abs > umbral_pct * 3
+                       else "ALTA" if sev_abs > umbral_pct * 1.5
+                       else "MEDIA")
+                row: Dict[str, Any] = {
+                    "ID":         r["ID"],
+                    "ISIN":       r["ID"],   # alias por compatibilidad JS
                     "FUENTE":     nombre,
-                    "PRECIO_HOY": round(r["PRECIO_HOY"], 6),
-                    "PRECIO_ANT": round(r["PRECIO_ANT"], 6),
-                    "VAR_PCT":    round(r["VAR_PCT"], 4),
-                    "SEVERIDAD":  "CRITICA" if abs(r["VAR_PCT"]) > umbral_pct * 3
-                                  else "ALTA" if abs(r["VAR_PCT"]) > umbral_pct * 1.5
-                                  else "MEDIA",
-                })
+                    "PRECIO_HOY": round(float(r["PRECIO_HOY"]), 6),
+                    "PRECIO_ANT": round(float(r["PRECIO_ANT"]), 6),
+                    "VAR_ABS":    round(float(r["VAR_ABS"]), 6),
+                    "VAR_PCT":    round(float(r["VAR_PCT"]), 4),
+                    "SEVERIDAD":  sev,
+                    "FECHA_HOY":  fecha,
+                    "FECHA_ANT":  fa,
+                }
+                # Meta extra
+                for col in meta_extra:
+                    if col in r.index:
+                        v = r[col]
+                        row[col] = None if (isinstance(v, float) and not np.isfinite(v)) else v
+                if "Descripcion" in r.index:
+                    v = r["Descripcion"]
+                    row["Descripcion"] = None if (isinstance(v, float) and not np.isfinite(v)) else v
+                alertas.append(row)
+
         except Exception as e:
-            logger.error(f"Error alertas {nombre}: {e}")
+            logger.error(f"Error alertas {nombre}: {e}", exc_info=True)
 
     alertas.sort(key=lambda x: abs(x["VAR_PCT"]), reverse=True)
     return {
-        "total":     len(alertas),
-        "fecha":     fecha,
-        "fecha_ant": fa,
-        "umbral":    umbral_pct,
-        "criticas":  sum(1 for a in alertas if a["SEVERIDAD"] == "CRITICA"),
-        "altas":     sum(1 for a in alertas if a["SEVERIDAD"] == "ALTA"),
-        "medias":    sum(1 for a in alertas if a["SEVERIDAD"] == "MEDIA"),
-        "alertas":   alertas,
+        "total":              len(alertas),
+        "fecha":              fecha,
+        "fecha_ant":          fa,
+        "fechas_disponibles": fechas,
+        "umbral":             umbral_pct,
+        "criticas":           sum(1 for a in alertas if a["SEVERIDAD"] == "CRITICA"),
+        "altas":              sum(1 for a in alertas if a["SEVERIDAD"] == "ALTA"),
+        "medias":             sum(1 for a in alertas if a["SEVERIDAD"] == "MEDIA"),
+        "alertas":            alertas,
     }
 
 

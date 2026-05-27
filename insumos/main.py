@@ -129,7 +129,7 @@ def _auto_convertir():
     Corre en hilo daemon después del arranque.
     Para CADA fecha disponible en Infovalmer (orden desc, máx 2 recientes):
       - Verifica si PKL + XLSX ya existen.
-      - Si faltan → convierte y exporta en:
+      - Si faltan -> convierte y exporta en:
           infovalmer/FECHA/pkl/PROVEEDOR_FECHA.pkl
           infovalmer/FECHA/excel/PROVEEDOR_FECHA.xlsx
     """
@@ -186,7 +186,7 @@ def _auto_convertir():
                     _guardar_cache(_fecha, proveedor, df, export_excel=True)
                     logger.info(
                         f"  [{_fecha}] {proveedor}: {len(df):,} filas "
-                        f"→ pkl + excel OK"
+                        f"-> pkl + excel OK"
                     )
                     return proveedor, len(df), True
                 except Exception as e:
@@ -199,7 +199,7 @@ def _auto_convertir():
             ok = sum(1 for _, _, s in resultados if s)
             logger.info(
                 f"[{fecha}] Conversión completada: {ok}/{len(faltantes)} OK. "
-                f"PKL → infovalmer/{fecha}/pkl/   XLSX → infovalmer/{fecha}/excel/"
+                f"PKL -> infovalmer/{fecha}/pkl/   XLSX -> infovalmer/{fecha}/excel/"
             )
 
     except Exception as e:
@@ -213,13 +213,13 @@ if __name__ == "__main__":
     port   = int(cfg.get("port", 8001))
     reload = bool(cfg.get("reload", False))   # reload=False para no perder el hilo de conversión
 
-    # Banner de arranque
+    # Banner de arranque (solo ASCII para compatibilidad cp1252)
     print()
     print("=" * 54)
-    print("  MVALORACION — Insumos")
-    print(f"  URL   →  http://localhost:{port}")
-    print(f"  API   →  http://localhost:{port}/api/docs")
-    print(f"  Host  →  {host}:{port}")
+    print("  MVALORACION -- Insumos")
+    print(f"  URL  ->  http://localhost:{port}")
+    print(f"  API  ->  http://localhost:{port}/api/docs")
+    print(f"  Host ->  {host}:{port}")
     print("=" * 54)
     print()
 
@@ -233,4 +233,4 @@ if __name__ == "__main__":
 
     logger.info(f"Servidor iniciando en http://{host}:{port}")
     uvicorn.run("main:app", host=host, port=port, reload=reload,
-                log_level="warning")   # ← silencia logs internos de uvicorn
+                log_level="warning")   # <- silencia logs internos de uvicorn

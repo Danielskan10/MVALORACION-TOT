@@ -133,8 +133,10 @@ body { display:flex; flex-direction:column; min-height:100vh; overflow-x:hidden;
   white-space:nowrap; cursor:pointer; user-select:none;
 }
 .twrap th:hover { color:var(--txt); }
-.twrap th.asc::after  { content:' \2191'; color:var(--sk-green); }
-.twrap th.desc::after { content:' \2193'; color:var(--sk-green); }
+.twrap th.asc::after    { content:' \2191'; color:var(--sk-green); }
+.twrap th.desc::after   { content:' \2193'; color:var(--sk-green); }
+.twrap th.th-asc::after  { content:' \2191'; color:var(--sk-green); }
+.twrap th.th-desc::after { content:' \2193'; color:var(--sk-green); }
 .twrap td { padding:.3rem .6rem; border-bottom:1px solid var(--bdr); white-space:nowrap; }
 .twrap tr:last-child td { border-bottom:none; }
 .twrap tr:hover td { background:var(--row-h); }
@@ -213,6 +215,28 @@ body { display:flex; flex-direction:column; min-height:100vh; overflow-x:hidden;
 .empty { text-align:center; padding:2.5rem 1rem; color:var(--muted); font-size:.8rem; }
 .spinner { display:inline-block; width:18px; height:18px; border:2px solid var(--bdr2); border-top-color:var(--sk-green); border-radius:50%; animation:spin .7s linear infinite; }
 @keyframes spin { to { transform:rotate(360deg); } }
+
+/* ── SOURCE BADGES (alertas) ─────────────────────────── */
+.src-badge {
+  display:inline-flex; align-items:center; padding:.08rem .32rem;
+  border-radius:4px; font-size:.6rem; font-weight:800; letter-spacing:.04em;
+}
+.src-SP    { background:rgba(10,132,255,.15);  color:#0A84FF; }
+.src-SW    { background:rgba(191,90,242,.15);  color:#BF5AF2; }
+.src-SV    { background:rgba(255,149,0,.14);   color:#FF9500; }
+.src-MX    { background:rgba(0,166,90,.13);    color:#00A65A; }
+.src-MX_RV { background:rgba(0,201,110,.13);   color:#00C96E; }
+.src-NOTAS { background:rgba(255,214,10,.13);  color:#c9a800; }
+.src-TP    { background:rgba(255,59,48,.13);   color:#FF3B30; }
+
+/* ── TABLA ALERTAS — celdas especiales ──────────────── */
+.isin-cell {
+  font-size:.72rem; font-weight:700; max-width:140px;
+  overflow:hidden; text-overflow:ellipsis; display:block;
+}
+.nemo-cell { font-size:.69rem; color:var(--muted); max-width:100px; overflow:hidden; text-overflow:ellipsis; }
+.num-cell  { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.num-cell.muted { color:var(--muted); }
 
 @media (max-width:900px) {
   .g2,.g3,.tops-grid { grid-template-columns:1fr; }
