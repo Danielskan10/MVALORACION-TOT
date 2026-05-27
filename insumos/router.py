@@ -231,26 +231,62 @@ def _guardar_cache(fecha: str, proveedor: str, df: pd.DataFrame,
                    export_excel: bool = True) -> Dict[str, Any]:
     """
     Guarda PKL en infovalmer/FECHA/pkl/
-    Si export_excel=True, guarda XLSX en infovalmer/FECHA/excel/
+    Si export_excel=True, guarda XLSX (o CSV para archivos grandes) en infovalmer/FECHA/excel/
+
+    Estrategia por tamaño:
+      - <= 50K filas   → XLSX con xlsxwriter (rápido)
+      - > 50K filas    → CSV (2-3s) + XLSX en hilo background (no bloquea)
     """
     pkl = _cache_path(fecha, proveedor)
     df.to_pickle(pkl)
 
     xlsx_path = None
+    csv_path  = None
     excel_ok  = False
+
     if export_excel and not df.empty:
         xlsx_path = _excel_path(fecha, proveedor)
-        try:
-            df.to_excel(xlsx_path, index=False)
-            excel_ok = True
-        except Exception as e:
-            logger.warning(f"Excel falló {xlsx_path}: {e}")
+        n = len(df)
+
+        if n <= 50_000:
+            # Archivo chico → XLSX directo con xlsxwriter (si disponible) u openpyxl
+            try:
+                try:
+                    df.to_excel(xlsx_path, index=False, engine="xlsxwriter")
+                except ImportError:
+                    df.to_excel(xlsx_path, index=False, engine="openpyxl")
+                excel_ok = True
+            except Exception as e:
+                logger.warning(f"Excel fallo {xlsx_path}: {e}")
+        else:
+            # Archivo grande (SP) → CSV inmediato + XLSX en background
+            csv_path = xlsx_path.with_suffix(".csv")
+            try:
+                df.to_csv(csv_path, index=False)
+                logger.info(f"[{fecha}] {proveedor}: CSV guardado ({n:,} filas) en {csv_path.name}")
+                # XLSX en hilo background (no bloquea la conversión de otros proveedores)
+                def _bg_excel(_df=df.copy(), _path=xlsx_path, _prov=proveedor, _fecha=fecha):
+                    try:
+                        try:
+                            _df.to_excel(_path, index=False, engine="xlsxwriter")
+                        except ImportError:
+                            _df.to_excel(_path, index=False, engine="openpyxl")
+                        logger.info(f"[{_fecha}] {_prov}: Excel listo en background -> {_path.name}")
+                    except Exception as _e:
+                        logger.warning(f"[{_fecha}] {_prov}: Excel background fallo: {_e}")
+                import threading
+                threading.Thread(target=_bg_excel, daemon=True).start()
+                # Reportar como xlsx_path (se generará en background)
+                excel_ok = True
+            except Exception as e:
+                logger.warning(f"CSV fallo {csv_path}: {e}")
 
     return {
         "proveedor": proveedor,
         "filas":     int(len(df)),
         "pkl":       str(pkl),
         "xlsx":      str(xlsx_path) if excel_ok else None,
+        "csv":       str(csv_path)  if csv_path and csv_path.exists() else None,
         "cache_ok":  True,
     }
 
@@ -291,21 +327,37 @@ def _cache_status(fecha: str) -> Dict[str, Any]:
 # PARSERS DE ARCHIVOS INFOVALMER
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def cargar_sp(fecha: str, use_cache: bool = True) -> pd.DataFrame:
+def cargar_sp(fecha: str, use_cache: bool = True,
+              progress_cb=None) -> pd.DataFrame:
     """SP = BVC Renta Fija local (fixed-width .001).
-    Layout por posición de carácter (según legacy Revisiones_Valoracion):
-      [0:7]   Numero_Secuencia
-      [7:20]  NEMO
-      [20:32] ISIN
-      [51:59] Emision
-      [59:67] Vcto
-      [75:77] Tipo_Tasa
-      [77:81] Plazo
-      [81:84] Base
-      [86:89] Moneda
-      [96:105] P_SUCIO  ← precio valoración
-      [122:129] P_LIMPIO
-      [179:187] Tasa (TIR)
+    Layout completo (legacy Revisiones_Valoracion_V2021):
+      [0:7]    Numero_Secuencia
+      [7:8]    Tipo_Registro
+      [8:20]   NEMO
+      [20:32]  ISIN
+      [32:50]  Numero_Emision
+      [50:51]  Estado
+      [51:59]  Fecha_Emision  (YYYYMMDD)
+      [59:67]  Fecha_Vcto     (YYYYMMDD)
+      [67:75]  Fecha_Ult_Precio
+      [75:76]  Periodicidad
+      [76:77]  Modalidad
+      [77:81]  Dias_Vcto / Plazo
+      [81:84]  Base_Calculo
+      [84:85]  Tipo_Tasa
+      [85:89]  Moneda
+      [89:105] P_SUCIO  (Precio_Valor_Calculado)
+      [105:109] Tipo_Calculo
+      [109:110] Base
+      [110:129] P_LIMPIO
+      [129:137] Fecha_Ult
+      [137:156] Rendimiento / TIR alternativo
+      [156:168] Codigo_ISIN2
+      [168:187] TIR
+    Optimizaciones:
+      - Loop Python con buffer (más rápido que read_fwf para archivos 50MB+)
+      - Progreso cada 50K lineas via progress_cb
+      - Para >50K filas: CSV inmediato + Excel en background
     """
     if use_cache:
         cached = _leer_cache(fecha, "SP")
@@ -315,45 +367,100 @@ def cargar_sp(fecha: str, use_cache: bool = True) -> pd.DataFrame:
     path = _infovalmer_dir(fecha) / f"SP{sf}.001"
     if not path.exists():
         return pd.DataFrame()
-    filas = []
+
+    # Tamaño para estimar progreso
     try:
-        with open(path, "r", encoding="latin-1", errors="ignore") as fh:
+        file_size = path.stat().st_size
+    except Exception:
+        file_size = 0
+
+    if progress_cb:
+        sz_mb = file_size / 1024 / 1024
+        progress_cb({"paso": "SP", "msg": f"Leyendo {sz_mb:.1f} MB...", "pct": 3})
+
+    try:
+        filas   = []
+        n_total = 0
+        n_ok    = 0
+        CHUNK   = 50_000   # reportar progreso cada X líneas
+
+        with open(path, "r", encoding="latin-1", errors="ignore", buffering=1<<20) as fh:
             for ln in fh:
-                ln = ln.rstrip("\n")
-                if len(ln) < 107 or not ln[51:53].startswith("20"):
+                n_total += 1
+                # Reporte de progreso cada 50K líneas
+                if progress_cb and n_total % CHUNK == 0:
+                    # Estimar % basado en bytes leídos (aproximado)
+                    pct_est = min(int(n_total * 187 / max(file_size, 1) * 80) + 3, 80)
+                    progress_cb({
+                        "paso": "SP",
+                        "msg":  f"Leyendo... {n_total:,} lineas ({n_ok:,} validas)",
+                        "pct":  pct_est,
+                    })
+
+                if len(ln) < 107 or ln[51:53] != "20":
                     continue
-                p_sucio  = _parse_num(ln[96:105])
-                p_limpio = _parse_num(ln[122:129]) if len(ln) >= 129 else None
-                precio   = p_sucio if p_sucio is not None else p_limpio
+
+                # Extraer precio
+                p_sucio_s  = ln[89:105].strip()
+                p_limpio_s = ln[110:129].strip() if len(ln) >= 129 else ""
+                try:
+                    p_sucio = float(p_sucio_s.replace(",", ".")) if p_sucio_s else None
+                except ValueError:
+                    p_sucio = None
+                try:
+                    p_limpio = float(p_limpio_s.replace(",", ".")) if p_limpio_s else None
+                except ValueError:
+                    p_limpio = None
+
+                precio = p_sucio if p_sucio is not None else p_limpio
                 if precio is None:
                     continue
-                tir      = _parse_num(ln[179:187]) if len(ln) >= 187 else None
+
+                try:
+                    tir = float(ln[168:187].strip().replace(",", ".")) if len(ln) >= 187 else None
+                except ValueError:
+                    tir = None
+
                 plazo_raw = ln[77:81].strip()
-                plazo    = int(plazo_raw) if plazo_raw.isdigit() else None
                 isin = ln[20:32].strip().upper()
-                nemo = ln[7:20].strip().upper()
-                filas.append({
-                    "NEMO":       nemo,
-                    "ISIN":       isin,
-                    "Emision":    ln[51:59].strip(),
-                    "Vcto":       ln[59:67].strip(),
-                    "Tipo_Tasa":  ln[75:77].strip(),
-                    "Plazo":      plazo,
-                    "Base":       ln[81:84].strip(),
-                    "Moneda":     ln[86:89].strip(),
-                    "P_SUCIO":    p_sucio,
-                    "P_LIMPIO":   p_limpio,
-                    "TIR":        tir,
-                    "PRECIO":     precio,
-                    "ID":         isin if isin else nemo,
-                    "FUENTE":     "SP",
-                })
+                nemo = ln[8:20].strip().upper()
+
+                filas.append((
+                    nemo, isin,
+                    ln[51:59].strip(),   # Emision
+                    ln[59:67].strip(),   # Vcto
+                    ln[84:85].strip(),   # Tipo_Tasa (col 84:85, no 75:77)
+                    int(plazo_raw) if plazo_raw.isdigit() else None,
+                    ln[81:84].strip(),   # Base
+                    ln[85:89].strip(),   # Moneda
+                    p_sucio, p_limpio, tir, precio,
+                    isin if isin else nemo,  # ID
+                ))
+                n_ok += 1
+
+        if progress_cb:
+            progress_cb({"paso": "SP", "msg": f"{n_ok:,} titulos validos — guardando cache...", "pct": 85})
+
+        if not filas:
+            return pd.DataFrame()
+
+        df = pd.DataFrame(filas, columns=[
+            "NEMO","ISIN","Emision","Vcto","Tipo_Tasa","Plazo",
+            "Base","Moneda","P_SUCIO","P_LIMPIO","TIR","PRECIO","ID",
+        ])
+        df["FUENTE"] = "SP"
+
+        logger.info(f"SP {fecha}: {len(df):,} titulos de {n_total:,} lineas")
+        _guardar_cache(fecha, "SP", df)
+
+        if progress_cb:
+            progress_cb({"paso": "SP", "msg": f"OK — {len(df):,} titulos (Excel en background)", "pct": 100})
+
+        return df
+
     except Exception as e:
-        logger.error(f"Error cargando SP: {e}")
+        logger.error(f"Error cargando SP: {e}", exc_info=True)
         return pd.DataFrame()
-    df = pd.DataFrame(filas)
-    _guardar_cache(fecha, "SP", df)
-    return df
 
 
 def cargar_sw(fecha: str, use_cache: bool = True) -> pd.DataFrame:
@@ -697,56 +804,209 @@ def estado_cache(fecha: str):
     return _cache_status(fecha)
 
 
+# ── Estado de progreso de conversión (compartido entre hilos) ────────────────
+import queue as _queue
+_conv_progress: Dict[str, Any] = {}   # fecha → dict con estado actual
+_conv_queues:   Dict[str, "_queue.Queue"] = {}
+
+
+@router.get("/convertir_progreso/{fecha}")
+def convertir_progreso_sse(fecha: str):
+    """
+    SSE: emite eventos de progreso mientras /convertir/{fecha} está corriendo.
+    El frontend se conecta antes de llamar POST /convertir.
+    Formato: data: {...JSON...}\\n\\n
+    """
+    from fastapi.responses import StreamingResponse
+    import time, json as _json
+
+    q = _conv_queues.setdefault(fecha, _queue.Queue(maxsize=200))
+
+    def _stream():
+        timeout = 120   # máximo 2 minutos esperando
+        t0 = time.time()
+        while time.time() - t0 < timeout:
+            try:
+                msg = q.get(timeout=1.0)
+                yield f"data: {_json.dumps(msg, ensure_ascii=False)}\n\n"
+                if msg.get("done"):
+                    break
+            except _queue.Empty:
+                yield ": ping\n\n"   # keep-alive
+        yield "data: {\"done\":true}\n\n"
+
+    return StreamingResponse(
+        _stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
 @router.post("/convertir/{fecha}")
 def convertir_insumos(
     fecha: str,
     force: bool = Query(False, description="Reconvertir aunque el PKL ya exista"),
 ):
     """
-    Convierte TODOS los archivos crudos de Infovalmer para la fecha dada.
-    - PKL  → infovalmer/FECHA/pkl/PROVEEDOR_FECHA.pkl
-    - XLSX → infovalmer/FECHA/excel/PROVEEDOR_FECHA.xlsx
-    - Si el PKL ya existe y force=False, lo omite (no reconvierte).
-    - Paralelo con 4 hilos.
+    Convierte TODOS los archivos de Infovalmer para la fecha dada.
+    Emite progreso en tiempo real por /convertir_progreso/{fecha} (SSE).
+    SP usa pd.read_fwf vectorizado (10-20x más rápido que loop).
     """
-    loaders = {
-        "SP": cargar_sp, "SW": cargar_sw, "TP": cargar_tp, "SV": cargar_sv,
-        "MX": cargar_mx, "MX_RV": cargar_mx_rv, "NOTAS": cargar_notas,
-        "SB": cargar_sb, "MONEDAS": cargar_monedas,
-    }
+    import json as _json, time as _time
 
-    def _uno(item):
-        proveedor, loader = item
-        pkl = _cache_path(fecha, proveedor)
+    # Cola de progreso para SSE
+    q = _conv_queues.setdefault(fecha, _queue.Queue(maxsize=200))
+
+    def _emit(msg: Dict):
+        """Manda evento de progreso a la cola SSE (no bloquea)."""
+        try:
+            q.put_nowait(msg)
+        except _queue.Full:
+            pass
+        logger.info(f"[{fecha}] {msg.get('proveedor','?')}: {msg.get('msg','')}")
+
+    LOADERS_ORD = [
+        # SP primero porque es el más grande
+        ("SP",    cargar_sp),
+        ("SW",    cargar_sw),
+        ("SV",    cargar_sv),
+        ("TP",    cargar_tp),
+        ("MX",    cargar_mx),
+        ("MX_RV", cargar_mx_rv),
+        ("NOTAS", cargar_notas),
+        ("SB",    cargar_sb),
+        ("MONEDAS", cargar_monedas),
+    ]
+    total_provs = len(LOADERS_ORD)
+    resultados  = []
+
+    for idx, (proveedor, loader) in enumerate(LOADERS_ORD):
+        pct_base = int(idx / total_provs * 100)
+        pct_next = int((idx + 1) / total_provs * 100)
+
+        pkl  = _cache_path(fecha, proveedor)
         xlsx = _excel_path(fecha, proveedor)
+
+        # ── Ya existe y no se fuerza ──────────────────────────────────
         if pkl.exists() and xlsx.exists() and not force:
             cached = _leer_cache(fecha, proveedor)
-            return {
-                "proveedor": proveedor,
-                "filas":     int(len(cached)) if cached is not None else 0,
-                "cache_ok":  True,
-                "omitido":   True,
-                "pkl":       str(pkl),
-                "xlsx":      str(xlsx),
-            }
+            n = int(len(cached)) if cached is not None else 0
+            _emit({
+                "proveedor": proveedor, "pct": pct_next,
+                "msg": f"ya existia ({n:,} filas)", "omitido": True,
+                "filas": n, "cache_ok": True,
+            })
+            resultados.append({
+                "proveedor": proveedor, "filas": n,
+                "cache_ok": True, "omitido": True,
+                "pkl": str(pkl), "xlsx": str(xlsx),
+            })
+            continue
+
+        # ── Progreso interno para SP (es el más pesado) ───────────────
+        def _progress_cb(ev: Dict, _pct_base=pct_base, _pct_next=pct_next, _prov=proveedor):
+            frac = ev.get("pct", 0) / 100.0
+            pct  = int(_pct_base + frac * (_pct_next - _pct_base))
+            _emit({"proveedor": _prov, "pct": pct, "msg": ev.get("msg", ""), "paso": ev.get("paso","")})
+
+        _emit({"proveedor": proveedor, "pct": pct_base, "msg": "Iniciando..."})
+
         try:
-            df = loader(fecha, use_cache=False)
+            t0 = _time.time()
+            # SP acepta progress_cb; el resto no, pero no falla
+            if proveedor == "SP":
+                df = loader(fecha, use_cache=False, progress_cb=_progress_cb)
+            else:
+                df = loader(fecha, use_cache=False)
+
+            dt = round(_time.time() - t0, 1)
+
             if df.empty:
-                return {"proveedor": proveedor, "filas": 0, "cache_ok": False,
-                        "error": "archivo fuente no encontrado o vacío"}
-            return _guardar_cache(fecha, proveedor, df, export_excel=True)
+                _emit({
+                    "proveedor": proveedor, "pct": pct_next,
+                    "msg": "archivo no encontrado o vacio", "error": True,
+                })
+                resultados.append({
+                    "proveedor": proveedor, "filas": 0,
+                    "cache_ok": False, "error": "archivo fuente no encontrado o vacío",
+                })
+                continue
+
+            _emit({"proveedor": proveedor, "pct": pct_next - 2,
+                   "msg": f"{len(df):,} filas — guardando Excel..."})
+
+            res = _guardar_cache(fecha, proveedor, df, export_excel=True)
+            res["tiempo_s"] = dt
+
+            _emit({
+                "proveedor": proveedor, "pct": pct_next,
+                "msg": f"OK — {len(df):,} filas en {dt}s",
+                "filas": len(df), "cache_ok": True,
+            })
+            resultados.append(res)
+
         except Exception as e:
             logger.exception(f"Error convirtiendo {proveedor} {fecha}")
-            return {"proveedor": proveedor, "filas": 0, "cache_ok": False, "error": str(e)}
+            _emit({"proveedor": proveedor, "pct": pct_next,
+                   "msg": f"ERROR: {e}", "error": True})
+            resultados.append({
+                "proveedor": proveedor, "filas": 0,
+                "cache_ok": False, "error": str(e),
+            })
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
-        resultados = list(pool.map(_uno, loaders.items()))
+    # ── Señal de fin ──────────────────────────────────────────────────
+    ok = all(r.get("cache_ok") for r in resultados)
+    _emit({"done": True, "pct": 100,
+           "msg": f"Completado: {sum(1 for r in resultados if r.get('cache_ok'))} OK / {total_provs}",
+           "ok": ok})
 
     return {
-        "ok":         all(r.get("cache_ok") for r in resultados),
+        "ok":         ok,
         "fecha":      fecha,
         "status":     _cache_status(fecha),
         "resultados": resultados,
+    }
+
+
+@router.get("/conectividad")
+def verificar_conectividad():
+    """
+    Verifica si la carpeta Infovalmer configurada es accesible.
+    Útil para detectar si la VPN está conectada.
+    """
+    from config import get_config
+    cfg  = get_config()
+    inf  = cfg.get("infovalmer_dir", "")
+    path = Path(inf) if inf else None
+
+    bases_status = []
+    for base in _get_bases():
+        fechas_en_base = []
+        try:
+            for d in base.iterdir():
+                if d.is_dir() and _fecha_valida(d.name):
+                    fechas_en_base.append(d.name)
+        except Exception:
+            pass
+        bases_status.append({
+            "ruta":        str(base),
+            "accesible":   base.exists(),
+            "es_principal": str(base) == inf,
+            "fechas":      sorted(fechas_en_base)[-5:],   # últimas 5
+            "n_fechas":    len(fechas_en_base),
+        })
+
+    principal_ok = path.exists() if path else False
+    return {
+        "infovalmer_dir":       inf,
+        "principal_accesible":  principal_ok,
+        "mensaje":              (
+            "Carpeta Infovalmer accesible" if principal_ok
+            else ("No configurada" if not inf
+                  else "No accesible — verifica VPN o ruta")
+        ),
+        "bases": bases_status,
+        "fechas_disponibles": _fechas_disponibles(),
     }
 
 

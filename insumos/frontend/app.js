@@ -60,7 +60,7 @@ function showTab(id, el) {
   if (id==='tab-mx')          cargarTabla('MX');
   if (id==='tab-notas')       cargarTabla('NOTAS');
   if (id==='tab-config')      cargarConfig();
-  if (id==='tab-conversor')   cargarStatusCache();
+  if (id==='tab-conversor')   { verificarConectividad(); cargarStatusCache(); }
   if (id==='tab-logs')        cargarLogs();
 }
 
@@ -688,12 +688,60 @@ async function guardarConfig() {
   setTimeout(()=>{ msg.textContent=''; msg.style.color=''; }, 3000);
 }
 
+// ── CONECTIVIDAD VPN ──────────────────────────────────────
+async function verificarConectividad() {
+  const dot   = $('vpn-dot');
+  const lbl   = $('vpn-lbl');
+  const cdot  = $('conv-vpn-dot');
+  const cmsg  = $('conv-vpn-msg');
+  if (lbl) lbl.textContent = '...';
+  try {
+    const d = await J('/api/insumos/conectividad');
+    const ok  = d.principal_accesible;
+    const nf  = d.fechas_disponibles?.length || 0;
+    const col = ok ? '#00A65A' : '#FF9500';
+    const txt = ok
+      ? `Infovalmer OK (${nf} fechas)`
+      : (d.infovalmer_dir ? 'Sin VPN / ruta no accesible' : 'Sin configurar');
+
+    if (dot)  { dot.style.background  = col; }
+    if (lbl)  { lbl.textContent = txt; lbl.style.color = col; }
+    if (cdot) { cdot.style.background = col; }
+    if (cmsg) {
+      cmsg.textContent = d.mensaje || txt;
+      cmsg.style.color = ok ? 'var(--sk-green)' : '#FF9500';
+    }
+
+    // Mostrar rutas disponibles en el panel conversor
+    if (d.bases && d.bases.length) {
+      const infoEl = $('conv-vpn-info');
+      if (infoEl) {
+        const rutasHtml = d.bases.map(b=>`
+          <span style="display:inline-flex;align-items:center;gap:4px;padding:.1rem .4rem;border-radius:3px;background:${b.accesible?'rgba(0,166,90,.1)':'rgba(255,149,0,.1)'};border:1px solid ${b.accesible?'rgba(0,166,90,.25)':'rgba(255,149,0,.25)'};font-size:.6rem;margin-right:4px;">
+            <span style="width:5px;height:5px;border-radius:50%;background:${b.accesible?'#00A65A':'#FF9500'};flex-shrink:0;"></span>
+            ${esc(b.ruta)} ${b.accesible?`(${b.n_fechas} fechas)`:'sin acceso'}
+          </span>`).join('');
+        infoEl.innerHTML = `
+          <span id="conv-vpn-dot" style="width:9px;height:9px;border-radius:50%;background:${col};flex-shrink:0;"></span>
+          <span id="conv-vpn-msg" style="color:${ok?'var(--sk-green)':'#FF9500'};">${esc(d.mensaje)}</span>
+          <div style="margin-left:8px;display:flex;flex-wrap:wrap;gap:3px;">${rutasHtml}</div>
+          <button class="btn btn-ghost btn-sm" style="margin-left:auto;padding:.15rem .5rem;" onclick="verificarConectividad()">Verificar VPN</button>`;
+      }
+    }
+  } catch(e) {
+    if (dot) dot.style.background = '#FF3B30';
+    if (lbl) { lbl.textContent = 'Error'; lbl.style.color = '#FF3B30'; }
+    if (cmsg) cmsg.textContent = 'Error verificando conexion';
+  }
+}
+
 // ── CONVERSOR ─────────────────────────────────────────────
 async function cargarStatusCache() {
   const fecha = $('conv-fecha').value || S.fecha;
   if (!fecha) return;
   $('conv-fecha').value = fecha;
   const wrap = $('conv-tabla');
+  $('conv-live').style.display = 'none';
   wrap.innerHTML = '<div class="empty"><span class="spinner"></span> Verificando cache...</div>';
   try {
     const s = await J(`/api/insumos/cache/${fecha}`);
@@ -702,48 +750,109 @@ async function cargarStatusCache() {
 }
 
 function _renderCacheTabla(s, wrap) {
-  const provs    = Object.entries(s.proveedores||{});
-  const pklOk    = s.pkl_ok   ?? s.convertidos ?? 0;
-  const xlsxOk   = s.xlsx_ok  ?? 0;
-  const total    = s.total    || provs.length;
-  const completo = s.completo;
-  const allXlsx  = xlsxOk === total;
+  const provs   = Object.entries(s.proveedores||{});
+  const pklOk   = s.pkl_ok  ?? 0;
+  const xlsxOk  = s.xlsx_ok ?? 0;
+  const total   = s.total   || provs.length;
+  const compPkl = pklOk === total;
+  const compXls = xlsxOk === total;
+
+  // Colores de fuente
+  const srcColor = {SP:'#0A84FF',SW:'#BF5AF2',SV:'#FF9500',MX:'#00A65A',
+                    MX_RV:'#00C96E',NOTAS:'#FFD60A',TP:'#FF3B30',SB:'#8E8E93',MONEDAS:'#58a6ff'};
 
   wrap.innerHTML = `
-    <div style="margin-bottom:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
-      <span style="font-size:.75rem;font-weight:800;color:${completo?'var(--sk-green)':'var(--sk-orange)'};">
-        PKL: ${pklOk}/${total} ${completo?'✓':'⚠'}
+    <div style="margin-bottom:10px;display:flex;gap:12px;flex-wrap:wrap;align-items:center;">
+      <span style="font-size:.75rem;font-weight:800;color:${compPkl?'var(--sk-green)':'#FF9500'};">
+        Cache: ${pklOk}/${total} ${compPkl?'&#x2713;':'&#x26A0;'}
       </span>
-      <span style="font-size:.75rem;font-weight:800;color:${allXlsx?'var(--sk-green)':'var(--sk-orange)'};">
-        Excel: ${xlsxOk}/${total} ${allXlsx?'✓':'⚠'}
+      <span style="font-size:.75rem;font-weight:800;color:${compXls?'var(--sk-green)':'#FF9500'};">
+        Excel: ${xlsxOk}/${total} ${compXls?'&#x2713;':'&#x26A0;'}
       </span>
-      <span style="font-size:.63rem;color:var(--muted2);">
-        pkl → ${esc(s.pkl_dir||s.infovalmer||'')}
-      </span>
-      <span style="font-size:.63rem;color:var(--muted2);">
-        xlsx → ${esc(s.excel_dir||'')}
+      <span style="font-size:.62rem;color:var(--muted2);overflow:hidden;text-overflow:ellipsis;">
+        ${esc(s.pkl_dir||'')}
       </span>
     </div>
-    <div class="twrap">
+    <div class="twrap" style="max-height:320px;">
     <table>
       <thead><tr>
         <th>Proveedor</th>
-        <th>PKL (cache rápido)</th>
-        <th>Excel (infovalmer/FECHA/excel/)</th>
+        <th style="text-align:center;">Cache (.pkl)</th>
+        <th style="text-align:center;">Excel</th>
+        <th>Ruta pkl</th>
       </tr></thead>
       <tbody>${provs.map(([prov, v])=>`
         <tr>
-          <td><strong>${esc(prov)}</strong></td>
-          <td>${v.pkl
-            ? `<span style="color:var(--sk-green);font-weight:700;">✓ ok</span>`
-            : `<span style="color:var(--sk-red);">✗ falta</span>`}</td>
-          <td>${v.xlsx
-            ? `<span style="color:var(--sk-green);font-weight:700;">✓ ok</span>`
-            : `<span style="color:var(--muted2);">— pendiente</span>`}</td>
+          <td><span class="src-badge src-${prov}" style="color:${srcColor[prov]||'var(--muted)'}">${esc(prov)}</span></td>
+          <td style="text-align:center;">${v.pkl
+            ? `<span style="color:var(--sk-green);font-weight:700;">&#x2713; ok</span>`
+            : `<span style="color:#FF9500;">&#x25CB; falta</span>`}</td>
+          <td style="text-align:center;">${v.xlsx
+            ? `<span style="color:var(--sk-green);font-weight:700;">&#x2713; ok</span>`
+            : `<span style="color:var(--muted2);">&#x2014;</span>`}</td>
+          <td style="font-size:.59rem;color:var(--muted2);max-width:300px;overflow:hidden;text-overflow:ellipsis;">
+            ${v.pkl ? esc(v.pkl_path||'') : '—'}
+          </td>
         </tr>`).join('')}
       </tbody>
     </table>
     </div>`;
+}
+
+// Estado en vivo de la tabla de conversión
+const _liveRows = {};   // proveedor → <tr> element
+
+function _initLiveTabla(proveedores) {
+  const tbody = $('conv-live-body');
+  tbody.innerHTML = '';
+  Object.keys(_liveRows).forEach(k => delete _liveRows[k]);
+  const srcColor = {SP:'#0A84FF',SW:'#BF5AF2',SV:'#FF9500',MX:'#00A65A',
+                    MX_RV:'#00C96E',NOTAS:'#FFD60A',TP:'#FF3B30',SB:'#8E8E93',MONEDAS:'#58a6ff'};
+  proveedores.forEach(p => {
+    const tr = document.createElement('tr');
+    tr.id = `conv-row-${p}`;
+    tr.innerHTML = `
+      <td><span class="src-badge" style="background:rgba(128,128,128,.1);color:${srcColor[p]||'var(--muted)'};">${p}</span></td>
+      <td id="conv-st-${p}" style="color:var(--muted2);font-size:.72rem;">En espera...</td>
+      <td id="conv-fi-${p}" style="text-align:right;color:var(--muted2);">—</td>
+      <td id="conv-pk-${p}" style="text-align:center;">—</td>
+      <td id="conv-xl-${p}" style="text-align:center;">—</td>
+      <td id="conv-tm-${p}" style="text-align:right;color:var(--muted2);">—</td>`;
+    tbody.appendChild(tr);
+    _liveRows[p] = tr;
+  });
+}
+
+function _updateLiveRow(ev) {
+  const p = ev.proveedor;
+  if (!p || !$(`conv-st-${p}`)) return;
+  const stEl = $(`conv-st-${p}`);
+  const fiEl = $(`conv-fi-${p}`);
+  const pkEl = $(`conv-pk-${p}`);
+  const xlEl = $(`conv-xl-${p}`);
+  const tmEl = $(`conv-tm-${p}`);
+
+  if (ev.error) {
+    stEl.innerHTML = `<span style="color:#FF3B30;">&#x2717; ${esc(ev.msg||'Error')}</span>`;
+  } else if (ev.omitido) {
+    stEl.innerHTML = `<span style="color:var(--muted2);">ya existia</span>`;
+    fiEl.textContent = (ev.filas||0).toLocaleString('es-CO');
+    pkEl.innerHTML = `<span style="color:var(--sk-green);">&#x2713;</span>`;
+    xlEl.innerHTML = `<span style="color:var(--sk-green);">&#x2713;</span>`;
+  } else if (ev.cache_ok) {
+    stEl.innerHTML = `<span style="color:var(--sk-green);font-weight:700;">&#x2713; OK</span>`;
+    fiEl.textContent = (ev.filas||0).toLocaleString('es-CO');
+    pkEl.innerHTML = `<span style="color:var(--sk-green);">&#x2713;</span>`;
+    xlEl.innerHTML = `<span style="color:var(--sk-green);">&#x2713;</span>`;
+    if (ev.tiempo_s != null) tmEl.textContent = ev.tiempo_s+'s';
+  } else {
+    // En progreso
+    const pct = ev.pct || 0;
+    stEl.innerHTML = `<span style="color:var(--muted);">${esc(ev.msg||'...')}</span>
+      <div style="height:3px;background:var(--surf2);border-radius:2px;margin-top:3px;width:100%;">
+        <div style="height:3px;background:#0A84FF;border-radius:2px;width:${pct}%;transition:width .3s;"></div>
+      </div>`;
+  }
 }
 
 async function convertirFecha() {
@@ -751,54 +860,70 @@ async function convertirFecha() {
   const msg   = $('conv-msg');
   const fill  = $('conv-fill');
   const force = ($('conv-force')||{}).checked || false;
-  if (!fecha) { msg.textContent = 'Selecciona una fecha'; return; }
-  msg.innerHTML = '<span style="color:var(--muted2);">Convirtiendo en paralelo...</span>';
-  fill.style.width = '10%';
-  const wrap = $('conv-tabla');
-  wrap.innerHTML = '<div class="empty"><span class="spinner"></span> Procesando...</div>';
+  const btnC  = $('btn-convertir');
+  if (!fecha) { if(msg) msg.textContent = 'Selecciona una fecha'; return; }
+
+  // Bloquear botón
+  if (btnC) { btnC.disabled=true; btnC.textContent='Convirtiendo...'; }
+  if (msg)  msg.textContent = 'Conectando...';
+  if (fill) fill.style.width = '2%';
+
+  // Ocultar tabla estática, mostrar tabla en vivo
+  $('conv-tabla').style.display = 'none';
+  $('conv-live').style.display  = 'block';
+  const PROVS = ['SP','SW','SV','TP','MX','MX_RV','NOTAS','SB','MONEDAS'];
+  _initLiveTabla(PROVS);
+
+  // ── Conectar SSE ANTES de lanzar el POST ─────────────────────────
+  let sseOk = false;
+  const evtSrc = new EventSource(`/api/insumos/convertir_progreso/${fecha}`);
+
+  evtSrc.onmessage = ev => {
+    try {
+      const d = JSON.parse(ev.data);
+      if (d.done) {
+        evtSrc.close();
+        if (btnC) { btnC.disabled=false; btnC.textContent='▶ Convertir'; }
+        if (fill) fill.style.width = '100%';
+        if (msg) msg.textContent = d.msg || 'Completado';
+        // Recargar estado cache
+        setTimeout(()=>{
+          $('conv-tabla').style.display = '';
+          $('conv-live').style.display  = 'none';
+          cargarStatusCache();
+          S.tabData={}; S.alertas=[]; S.mdData=null; _curvaData=null;
+          cargarTodo();
+        }, 1200);
+        return;
+      }
+      // Actualizar barra global
+      if (d.pct != null && fill) fill.style.width = d.pct+'%';
+      if (d.msg && msg)  msg.textContent = (d.proveedor?`[${d.proveedor}] `:'') + d.msg;
+      // Actualizar fila del proveedor
+      _updateLiveRow(d);
+    } catch(_) {}
+  };
+
+  evtSrc.onerror = () => {
+    if (!sseOk) {
+      // SSE no disponible — fallback sin progreso
+      evtSrc.close();
+    }
+  };
+
+  // Pequeña pausa para que SSE se conecte antes del POST
+  await new Promise(r => setTimeout(r, 150));
+  sseOk = true;
+
   try {
-    const r = await fetch(`/api/insumos/convertir/${fecha}?force=${force}&excel=true`, {method:'POST'});
+    const r = await fetch(`/api/insumos/convertir/${fecha}?force=${force}`, {method:'POST'});
     if (!r.ok) throw new Error(r.status);
-    const d = await r.json();
-    fill.style.width = '100%';
-    const ok = (d.resultados||[]).filter(x=>x.cache_ok&&!x.omitido).length;
-    const om = (d.resultados||[]).filter(x=>x.omitido).length;
-    const er = (d.resultados||[]).filter(x=>!x.cache_ok).length;
-    msg.innerHTML = `
-      <span style="color:var(--sk-green);">✓ ${ok} convertidos</span>
-      ${om ? `<span style="color:var(--muted2);margin-left:8px;">${om} ya existían</span>` : ''}
-      ${er ? `<span style="color:var(--sk-red);margin-left:8px;">✗ ${er} errores</span>` : ''}`;
-    // Mostrar tabla detallada de resultados
-    wrap.innerHTML = `
-      <div class="twrap">
-      <table>
-        <thead><tr><th>Proveedor</th><th>Filas</th><th>Estado</th><th>Excel</th></tr></thead>
-        <tbody>${(d.resultados||[]).map(x=>`
-          <tr>
-            <td><strong>${esc(x.proveedor)}</strong></td>
-            <td style="text-align:right;">${(x.filas||0).toLocaleString('es-CO')}</td>
-            <td>${x.omitido
-              ? '<span style="color:var(--muted2);">ya existía</span>'
-              : x.cache_ok
-                ? '<span style="color:var(--sk-green);font-weight:700;">✓ convertido</span>'
-                : `<span style="color:var(--sk-red);">✗ ${esc(x.error||'error')}</span>`}
-            </td>
-            <td>${x.xlsx
-              ? `<span style="color:var(--sk-green);">✓</span>`
-              : '<span style="color:var(--muted2);">—</span>'}</td>
-          </tr>`).join('')}
-        </tbody>
-      </table>
-      </div>
-      <div style="margin-top:8px;font-size:.65rem;color:var(--muted2);">
-        Excel → ${esc(d.status?.excel_dir||d.status?.infovalmer||'infovalmer/FECHA/excel/')}
-      </div>`;
-    // Recargar datos con la nueva fecha
-    S.tabData = {}; S.alertas = []; S.mdData = null; _curvaData = null;
-    cargarTodo();
+    // El cierre lo hace el evento SSE "done"
   } catch(e) {
-    fill.style.width = '0';
-    msg.innerHTML = `<span style="color:var(--sk-red);">Error: ${esc(e.message)}</span>`;
+    evtSrc.close();
+    if (btnC) { btnC.disabled=false; btnC.textContent='▶ Convertir'; }
+    if (fill) fill.style.width = '0';
+    if (msg)  msg.innerHTML = `<span style="color:var(--sk-red);">Error: ${esc(e.message)}</span>`;
   }
 }
 
@@ -849,5 +974,7 @@ window.addEventListener('DOMContentLoaded', ()=>{
       if (!row) cerrarHistorial();
     }
   });
+  // Verificar conectividad VPN al inicio (no bloquea la carga)
+  verificarConectividad().catch(()=>{});
   cargarFechas();
 });
